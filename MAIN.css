@@ -29,3 +29,31 @@ html {
     height: 9px;
     background-color: rgb(95, 143, 40);
 }
+.container{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+
+}
+.image-block img{
+    width: 100%;
+    max-width: 100%;
+    padding-left: 30%;
+    height: auto;
+}
+
+@media (max-width: 768px){
+    .container{
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .body_text, .image-block img{
+        padding-left:0;
+        width: 100%;
+        margin-bottom: 20px;
+    }
+    .image-block img{
+        margin-bottom: 0;
+    }
+}
