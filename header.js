@@ -7,7 +7,7 @@ document.addEventListener('scroll', () =>{
         const distanceFrom_view = Math.abs(rect.top - viewport/2);
         const max_dis = viewport/2;
 
-        let new_size = Math.max(10, 50 - (distanceFrom_view / max_dis)*30);
+        let new_size = Math.max(20, 60 - (distanceFrom_view / max_dis)*30);
         element.style.fontSize = new_size + 'px';
         
     });
