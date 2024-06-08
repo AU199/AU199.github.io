@@ -1,11 +1,14 @@
-console.log("PROGRAM STARTED")
-var curr_text_size = function(amount){
-    var scroll_top = (window.scrollY || document.scroll_top);
-    var size = 90 - ((scroll_top / amount) || 0);
-    console.log(size)
-    if (size <= 15) size = 15;
+document.addEventListener('scroll', () =>{
+    const elements = document.querySelectorAll('.title_text');
+    const viewport = window.innerHeight;
 
-    document.querySelector('.title_text').setAttribute('style', 'font size: '+size+'px');
+    elements.forEach(element =>{
+        const rect = element.getBoundingClientRect();
+        const distanceFrom_view = Math.abs(rect.top - viewport/2);
+        const max_dis = viewport/2;
 
-};
-window.addEventListener('scroll', function(){ curr_text_size(10)});
+        let new_size = Math.max(10, 50 - (distanceFrom_view / max_dis)*30);
+        element.style.fontSize = new_size + 'px';
+        
+    });
+});
