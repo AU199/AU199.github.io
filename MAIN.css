@@ -9,7 +9,7 @@ html {
     color:beige;
     transition: font-size 0.1s;
     background-position-x: center;
-    background-position-y: top;
+    background-position-y: top + 100px;
     font-size: 40px;
     font-weight: 500;
 }
