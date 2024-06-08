@@ -7,8 +7,37 @@ html {
     font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     text-align: center;
     color:beige;
-    transition: font-size 0.2s;
+    transition: font-size 0.1s;
     background-position-x: center;
     background-position-y: top;
     font-size: 40px;
+    font-weight: 500;
+}
+
+.body_text_center {
+    font-family:'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+    color: antiquewhite;
+    font-size: 20px;
+    font-weight: 300;
+    text-align: center;
+}
+.body_text_left {
+    font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+    color: antiquewhite;
+    font-size: 20px;
+    font-weight: 300;
+}
+.body_text_right{
+    font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+    color: antiquewhite;
+    font-size: 20px;
+    font-weight: 300;
+}
+.rectangle{
+    width: 100%;
+    height: 5%;
+    background-color: rgb(77, 97, 69);
+    position: fixed;
+    top:0;
+    left:0;
 }
