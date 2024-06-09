@@ -1,12 +1,8 @@
 document.getElementById('carbon').addEventListener('submit',function(event){
     event.preventDefault();
 
-    const hoursPerday = parseFloat(document.getElementById('hours').value);
+   
     const average_miles_per_week = parseFloat(document.getElementById('miles').value);
-    if (isNaN(hoursPerday) || hoursPerday <  0 || hoursPerday > 168){
-        alert('Pleas Enter a vaild amount');
-        return;
-    }
 
     const amount_driven_year = average_miles_per_week * 52;
     const carbon_per_mile = 404;
