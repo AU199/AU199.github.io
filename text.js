@@ -1,15 +1,18 @@
-document.addEventListener('scroll', () =>{
-    const elements = document.querySelectorAll('.body_text');
-    const viewport = window.innerHeight;
+document.getElementById('carbon').addEventListener('submit',function(event){
+    event.preventDefault();
 
-    elements.forEach(element =>{
-        const rect = element.getBoundingClientRect();
-        const distanceFrom_view = Math.abs(rect.top - viewport/2);
-        const max_dis = viewport/4;
+    const hoursPerday = parseFloat(document.getElementById('hours').value);
+    const average_miles_per_week = parseFloat(document.getElementById('miles').value);
+    if (isNaN(hoursPerday) || hoursPerday <  0 || hoursPerday > 168){
+        alert('Pleas Enter a vaild amount');
+        return;
+    }
 
-        let new_size = Math.max(10, 50 - (distanceFrom_view / max_dis)*30);
-        let color = 'rgb'+(250 - new_size*2, 235 - new_size*2, 215 - new_size*2);
-        element.style.color = color;
-        
-    });
+    const amount_driven_year = average_miles_per_week * 52;
+    const carbon_per_mile = 404;
+    const annual_amount = amount_driven_year*carbon_per_mile / 1000;
+
+    const result_Div = document.getElementById('result');
+    result_Div.textContent = 'If continued at this pace, your carbon footprint annualy would approximately be ' + annual_amount.toFixed(2) +' kg of carbon dioxide';
+
 });
