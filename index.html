@@ -1,81 +1,23 @@
 <!DOCTYPE html>
-<html lang = "en">
-
-<head>
+<html lang="eng">
+    <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carbon Reducer</title>
-    <link rel = "stylesheet" href="MAIN.css">
-
-</head>
-<body>
-    <div class="title_text">WELCOME TO CARBON FOOTPRINT REDUCER</div>
-    <div class="body_text" style="text-align: center; font-size: medium;"> Welcome to carbon footprint reducer, here you can learn you can reduce your footprint, also greenhouse emisions through changing only certain habits in your life!!!</div>
-    <div style="height: 20px;"></div>
-    <div class="line"></div>
-    <div style="height: 20px;"></div>
-    <div class="body_text" style="text-align: left; font-size: 50px; color:beige;">
-        ABOUT
-    </div>
-    <div class="container">
-        <div class="body_text" style="text-align: left; ">
-            Throughout humanities greatest advancments there has been one item that has been present fossil fuels, and they are still present in the modern day, being used more than ever. Leading to a global problem, climate change, this could lead to the extiction of the human race as well as all other life forms, turning this beautiful planet into a barren waste land.
-        </div>
-        <div class="image-block">
-            <img src="/images/global_co2_2023.png" alt="Shows the great rise in global co2 levels">
+    <title>Personal Project Display</title>
+    <link rel = "stylesheet" href="Style.css">
+    </head>
+    <body>
+        <div class="container">
+        <div class="wheel-container">
+            <div class="wheel" id="wheel"></div>
         </div>
 
-    </div>
-    <div class="body_text" style="font-size: 10px; text-align: right; left:10px;">CHART SHOWING THE DRAMATIC RISE IN CARBON DIOXIDE LEVELS </div>
-    <div style="height: 20px;"></div>
-    <div class="line"></div>
-
-    <div class="body_text" style="text-align: left; font-size: 50px; color:beige;">
-        WHAT IS THE PROBLEM
-    </div>
-    <div class="container">
-        <div class="body_text" style="text-align: left;">
-            In 2016, to prevent the negative effects of climate change, the Paris Agreement agreed upon the goal of attaining a temperature only 1.5 degrees Celsius above pre-industrial times (1850-1900) by 2050. However, based on current advancements, the world is far off from this goal: it is projected to reach 1.7, even 1.8, Celsius by 2050. To avoid catastrophe and extensive damage, a solution must be found quickly.
-
+        <div class="controls">
+            <div class="arrow" id="prevBtn">↑</div>
+            <div class="arrow" id="nextBtn">↓</div>
         </div>
-    </div>
 
-    <div style="height: 20px;"></div>
-    <div class="line"></div>
-
-    <div style="height: 10px;"></div>
-
-    <div class="body_text" style="text-align: left; font-size: 50px; color:beige;">
-        WHAT CAN YOU DO?
-    </div>
-    <div class="container">
-        <div class="body_text" style="text-align: left;">
-            Well there are multiple ways you can help, and these can fit into your daily habits and life.
-            These can be as simple using the public transport, to being as complex as going of the grid, and starting your own farm (which I don't really recommend doing).
-            Though all of these don't promote change, the main thing that is required is advocating for climate change. 
-            This could be as small as trying to talk to someone about it, or as big as creating a petition, and any act counts, so go out and be the change you want to see.
-            The form down below is to show how driving produces great amounts of carbon dioxide, and how if mulitpule cars do the same, it can lead to an exponetical growth in the global levels. 
-
-        </div>
-    </div>
-
-
-    <div style="height: 100px"></div>
-
-
-    <div class="container_form">
-        <form id="carbon">
-           
-            <label for="miles">What is your average miles driven in one week:</label>
-            <input type="number" id="miles" name="miles" min="0" step="0.1" required>
-            <button type="submit">Calculate</button>
-
-        </form>
-        <div id="result"></div>
-    </div>
-    <script src="text.js"></script>
-    <script src="header.js"></script>
-
-</body>
-
+        <div class="progress-indicator" id="progressIndicator"></div>
+    </body>
+    <script src = "script.js"></script>
 </html>
