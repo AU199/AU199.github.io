@@ -29,7 +29,7 @@ const projects = [
         title:"Chess Engine",
         description:"Though this chess engine plays at a 400 elo level, it has taught me many valuble skills pertaining to machine learning, alpha-beta pruning, and optimization of programs.",
         language:"Python",
-        url: "https://github.com/AU199/Swim-Team-Webscraper"
+        url: "https://github.com/AU199/NN-Alpha-Beta-Pruning"
 
     }    
 
