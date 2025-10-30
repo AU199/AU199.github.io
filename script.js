@@ -4,7 +4,7 @@ const projects = [
         description: "Program that, using FIRST API and STATBotics API, produces a CSV file for each respective competition detailing each team and their performance within a specified time frame.",
         language: "Python",
 
-        url: "https://github.com/AU199/Event-Picker"
+        url: "https://github.com/AU199/Competition-Picker"
     },
     {
         title: "PSA (Carbon Cycle & Deforestation)",
@@ -12,6 +12,27 @@ const projects = [
         language: "Python",
         url: "https://github.com/AU199/PSA_GAME"
     },
+    {
+        title:"Personal Website",
+        description:"Created to showcase and give links to my personal projects (Created using the help of AI)",
+        language:"HTML",
+        url: "https://github.com/AU199/AU199.github.io"
+    },
+    {
+        title:"Swim-Team Data Collecter",
+        description:"Made for the swim coach to gain insight into times and other data about their swimmers. Taught me webscrapping and other skills",
+        language:"Python",
+        url: "https://github.com/AU199/Swim-Team-Webscraper"
+
+    },
+    {
+        title:"Chess Engine",
+        description:"Though this chess engine plays at a 400 elo level, it has taught me many valuble skills pertaining to machine learning, alpha-beta pruning, and optimization of programs.",
+        language:"Python",
+        url: "https://github.com/AU199/Swim-Team-Webscraper"
+
+    }    
+
 ];
 
 let currentIndex = 0;
@@ -22,9 +43,9 @@ const progressIndicator = document.getElementById('progressIndicator');
 
 function getLanguageColor(language) {
     const colors = {
-        'JavaScript': '#f1e05a',
         'Python': '#3572A5',
         'Java': '#b07219',
+        'HTML':'#ce331bff'
     };
     return colors[language] || '#888';
 }
