@@ -31,6 +31,13 @@ const projects = [
         language:"Python",
         url: "https://github.com/AU199/NN-Alpha-Beta-Pruning"
 
+    },
+    {
+        title: "Mechanical Keyboard",
+        description: "This personal project was my introduction to KiCad, where I learned how to create schematics and route PCBs. It taught me a lot, especially since it was my first time making a bill of materials and working to keep costs as low as possible. (Created through Hack Club’s Blueprint program.)",
+        language: "",
+        url:"https://github.com/AU199/Mecahnical_Keyboard.git"
+
     }    
 
 ];
@@ -45,7 +52,8 @@ function getLanguageColor(language) {
     const colors = {
         'Python': '#3572A5',
         'Java': '#b07219',
-        'HTML':'#ce331bff'
+        'HTML':'#ce331bff',
+        '':''
     };
     return colors[language] || '#888';
 }
