@@ -1,7 +1,448 @@
 <!DOCTYPE html>
-<html lang = "eng">
-    <body>
-        Hello World
-    </body>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>FRC Scouting Dashboard</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <!-- PyScript -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#49f61e",
+                        "background-light": "#f6f8f5",
+                        "background-dark": "#0a0e08",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: #0a0e08;
+            color: white;
+            min-height: max(884px, 100dvh);
+        }
+        .glass-card {
+            background: rgba(25, 40, 20, 0.4);
+            border: 1px solid rgba(73, 246, 30, 0.1);
+        }
+        .neon-glow {
+            box-shadow: 0 0 15px rgba(73, 246, 30, 0.2);
+        }
+        .active-tab {
+            color: #49f61e;
+        }
+        .setup-step {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen flex flex-col">
+    
+    <!-- Setup Wizard -->
+    <div id="setup-wizard" class="fixed inset-0 bg-black/95 backdrop-blur-sm z-[100] items-center justify-center p-4" style="display: flex;">
+        <div class="bg-background-dark border-2 border-primary/30 rounded-xl p-8 max-w-lg w-full">
+            <!-- Step 1: Welcome -->
+            <div id="step-welcome" class="setup-step">
+                <div class="text-center mb-8">
+                    <div class="text-primary flex size-20 items-center justify-center bg-primary/10 rounded-xl mx-auto mb-4">
+                        <span class="material-symbols-outlined !text-5xl">analytics</span>
+                    </div>
+                    <h1 class="text-white text-3xl font-bold mb-2">Welcome to FRC Scouting</h1>
+                    <p class="text-gray-400 text-sm">Let's get you set up in just 2 steps</p>
+                </div>
+                
+                <div class="space-y-4 mb-6">
+                    <div class="flex items-start gap-3 p-4 bg-white/5 rounded-lg">
+                        <span class="material-symbols-outlined text-primary mt-0.5">key</span>
+                        <div>
+                            <h3 class="text-white font-bold text-sm mb-1">Step 1: API Key</h3>
+                            <p class="text-gray-400 text-xs">Connect to The Blue Alliance</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3 p-4 bg-white/5 rounded-lg">
+                        <span class="material-symbols-outlined text-primary mt-0.5">event</span>
+                        <div>
+                            <h3 class="text-white font-bold text-sm mb-1">Step 2: Event Key</h3>
+                            <p class="text-gray-400 text-xs">Select which competition to track</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="start-setup" class="w-full bg-primary text-background-dark font-bold py-4 rounded-lg hover:bg-primary/90 transition-colors neon-glow">
+                    Get Started
+                    <span class="material-symbols-outlined align-middle ml-2">arrow_forward</span>
+                </button>
+            </div>
+            
+            <!-- Step 2: API Key -->
+            <div id="step-api-key" class="setup-step hidden">
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-white text-2xl font-bold">API Key Setup</h2>
+                        <span class="text-xs text-gray-500 font-bold uppercase">Step 1 of 2</span>
+                    </div>
+                    <div class="h-1 bg-white/10 rounded-full mb-6">
+                        <div class="h-full bg-primary rounded-full w-1/2"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="text-sm text-gray-300 font-bold block mb-3">
+                        <span class="material-symbols-outlined text-primary align-middle mr-2">key</span>
+                        The Blue Alliance API Key
+                    </label>
+                    <input 
+                        type="text" 
+                        id="wizard-api-key" 
+                        placeholder="Paste your TBA API key here"
+                        class="w-full bg-white/5 border-2 border-primary/20 rounded-lg px-4 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-primary text-lg"
+                    />
+                    <div id="api-key-error" class="hidden mt-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                        <p class="text-red-400 text-xs font-bold">⚠️ Please enter a valid API key</p>
+                    </div>
+                </div>
+                
+                <div class="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-6">
+                    <p class="text-xs text-gray-300 mb-3 font-bold">
+                        <span class="material-symbols-outlined text-primary align-middle mr-1 !text-sm">info</span>
+                        How to get your API key:
+                    </p>
+                    <ol class="text-xs text-gray-400 space-y-2 ml-1">
+                        <li class="flex items-start gap-2">
+                            <span class="text-primary font-bold">1.</span>
+                            <span>Visit <a href="https://www.thebluealliance.com/account" target="_blank" class="text-primary hover:underline font-bold">TheBlueAlliance.com/account</a></span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-primary font-bold">2.</span>
+                            <span>Sign in or create a free account</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-primary font-bold">3.</span>
+                            <span>Scroll to "Read API Keys" and click "Add New Key"</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-primary font-bold">4.</span>
+                            <span>Give it a description and copy the key</span>
+                        </li>
+                    </ol>
+                </div>
+                
+                <button id="next-to-event" class="w-full bg-primary text-background-dark font-bold py-4 rounded-lg hover:bg-primary/90 transition-colors">
+                    Continue to Event Selection
+                    <span class="material-symbols-outlined align-middle ml-2">arrow_forward</span>
+                </button>
+            </div>
+            
+            <!-- Step 3: Event Key -->
+            <div id="step-event-key" class="setup-step hidden">
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-white text-2xl font-bold">Select Event</h2>
+                        <span class="text-xs text-gray-500 font-bold uppercase">Step 2 of 2</span>
+                    </div>
+                    <div class="h-1 bg-white/10 rounded-full mb-6">
+                        <div class="h-full bg-primary rounded-full w-full"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="text-sm text-gray-300 font-bold block mb-3">
+                        <span class="material-symbols-outlined text-primary align-middle mr-2">event</span>
+                        Event Key
+                    </label>
+                    <input 
+                        type="text" 
+                        id="wizard-event-key" 
+                        placeholder="e.g., 2024cmptx"
+                        class="w-full bg-white/5 border-2 border-primary/20 rounded-lg px-4 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-primary text-lg"
+                    />
+                    <div id="event-key-error" class="hidden mt-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                        <p class="text-red-400 text-xs font-bold">⚠️ Please enter a valid event key</p>
+                    </div>
+                </div>
+                
+                <div class="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-4">
+                    <p class="text-xs text-gray-300 mb-3 font-bold">
+                        <span class="material-symbols-outlined text-primary align-middle mr-1 !text-sm">info</span>
+                        Event key format:
+                    </p>
+                    <div class="space-y-2 text-xs text-gray-400">
+                        <p><span class="text-primary font-mono">YEAR</span> + <span class="text-primary font-mono">EVENT_CODE</span></p>
+                        <div class="space-y-1 mt-2">
+                            <p class="font-mono text-white">2024cmptx <span class="text-gray-500">→ Houston World Championship</span></p>
+                            <p class="font-mono text-white">2024nytr <span class="text-gray-500">→ NY Tech Valley Regional</span></p>
+                            <p class="font-mono text-white">2024casd <span class="text-gray-500">→ San Diego Regional</span></p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-3">
+                        Find events at <a href="https://www.thebluealliance.com/events" target="_blank" class="text-primary hover:underline font-bold">TBA Events</a>
+                    </p>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="text-sm text-gray-300 font-bold block mb-3">
+                        <span class="material-symbols-outlined text-primary align-middle mr-2">group</span>
+                        My Team Number (Optional)
+                    </label>
+                    <input 
+                        type="text" 
+                        id="wizard-team-number" 
+                        placeholder="e.g., 254"
+                        class="w-full bg-white/5 border-2 border-primary/20 rounded-lg px-4 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-primary text-lg"
+                    />
+                    <p class="text-xs text-gray-500 mt-2">Track specific team statistics (you can change this later)</p>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button id="back-to-api" class="flex-1 bg-white/5 text-white font-bold py-4 rounded-lg hover:bg-white/10 transition-colors">
+                        <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
+                        Back
+                    </button>
+                    <button id="finish-setup" class="flex-[2] bg-primary text-background-dark font-bold py-4 rounded-lg hover:bg-primary/90 transition-colors neon-glow">
+                        Start Scouting
+                        <span class="material-symbols-outlined align-middle ml-2">check_circle</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[90] items-center justify-center hidden">
+        <div class="text-center">
+            <div class="inline-block size-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4"></div>
+            <p id="loading-text" class="text-white text-lg font-bold">Loading event data...</p>
+            <p class="text-gray-400 text-sm mt-2">This may take a few seconds</p>
+        </div>
+    </div>
+
+    <!-- Settings Modal (for later access) -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] items-center justify-center p-4 hidden">
+        <div class="bg-background-dark border-2 border-primary/30 rounded-xl p-6 max-w-md w-full">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-white text-xl font-bold">Settings</h2>
+                <button id="close-settings" class="text-gray-400 hover:text-white">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-gray-400 uppercase font-bold block mb-2">The Blue Alliance API Key</label>
+                    <input 
+                        type="text" 
+                        id="api-key-input" 
+                        placeholder="Enter your TBA API key"
+                        class="w-full bg-white/5 border border-primary/20 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-primary"
+                    />
+                    <p class="text-xs text-gray-500 mt-2">
+                        Get your API key from <a href="https://www.thebluealliance.com/account" target="_blank" class="text-primary hover:underline">TheBlueAlliance.com</a>
+                    </p>
+                </div>
+                
+                <div>
+                    <label class="text-xs text-gray-400 uppercase font-bold block mb-2">Event Key</label>
+                    <input 
+                        type="text" 
+                        id="event-key-input" 
+                        placeholder="e.g., 2024cmptx (Houston Worlds)"
+                        class="w-full bg-white/5 border border-primary/20 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-primary"
+                    />
+                    <p class="text-xs text-gray-500 mt-2">
+                        Find event keys at <a href="https://www.thebluealliance.com/events" target="_blank" class="text-primary hover:underline">TBA Events</a>
+                    </p>
+                </div>
+                
+                <div>
+                    <label class="text-xs text-gray-400 uppercase font-bold block mb-2">My Team Number (Optional)</label>
+                    <input 
+                        type="text" 
+                        id="team-number-input" 
+                        placeholder="e.g., 254"
+                        class="w-full bg-white/5 border border-primary/20 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-primary"
+                    />
+                </div>
+                
+                <button id="save-settings" class="w-full bg-primary text-background-dark font-bold py-3 rounded-lg hover:bg-primary/90 transition-colors">
+                    Save Settings
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-50 flex items-center bg-background-dark/80 backdrop-blur-md p-4 border-b border-primary/10 justify-between">
+        <div class="flex items-center gap-3">
+            <div class="text-primary flex size-10 items-center justify-center bg-primary/10 rounded-lg">
+                <span class="material-symbols-outlined">analytics</span>
+            </div>
+            <div>
+                <h2 class="text-white text-sm font-bold leading-tight tracking-tight uppercase">FRC Scouting</h2>
+                <p id="event-name" class="text-primary/70 text-[10px] font-medium tracking-widest uppercase">Loading event...</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] text-gray-400 uppercase">Sync Status</span>
+                <div class="flex items-center gap-1.5">
+                    <span id="sync-indicator" class="size-2 bg-gray-500 rounded-full"></span>
+                    <span id="sync-status" class="text-xs font-bold text-white">Offline</span>
+                </div>
+            </div>
+            <button id="settings-btn" class="text-white bg-white/5 hover:bg-white/10 p-2 rounded-lg transition-colors">
+                <span class="material-symbols-outlined">settings</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 p-4 pb-24 max-w-2xl mx-auto w-full space-y-6">
+        <!-- Welcome Section -->
+        <section class="pt-2">
+            <h1 class="text-white text-3xl font-bold leading-tight">Command Center</h1>
+            <p id="event-status" class="text-gray-400 text-sm mt-1">Waiting for data...</p>
+        </section>
+
+        <!-- Quick Actions Grid -->
+        <!-- <section class="space-y-4">
+            <button class="w-full flex items-center justify-between p-6 bg-primary text-background-dark rounded-xl neon-glow transition-transform active:scale-95">
+                <div class="flex items-center gap-4">
+                    <div class="bg-black/10 p-3 rounded-lg">
+                        <span class="material-symbols-outlined !text-4xl font-bold">sports_esports</span>
+                    </div>
+                    <div class="text-left">
+                        <span class="block text-lg font-bold uppercase tracking-tighter">Start Match Scouting</span>
+                        <span class="text-xs font-medium opacity-70">Tap to begin recording live data</span>
+                    </div>
+                </div>
+                <span class="material-symbols-outlined font-bold">play_circle</span>
+            </button>
+        </section> -->
+
+        <!-- Event Statistics -->
+        <section class="glass-card rounded-xl p-5">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-white text-xs font-bold uppercase tracking-widest text-primary/80">Event Statistics</h3>
+                <span class="material-symbols-outlined text-primary text-sm">trending_up</span>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <div class="space-y-1">
+                    <p class="text-[10px] text-gray-400 uppercase">Avg Score</p>
+                    <p id="avg-score" class="text-xl font-bold text-white">--</p>
+                </div>
+                <div class="space-y-1">
+                    <p class="text-[10px] text-gray-400 uppercase">Total Teams</p>
+                    <p id="total-teams" class="text-xl font-bold text-white">--</p>
+                </div>
+                <div class="space-y-1">
+                    <p class="text-[10px] text-gray-400 uppercase">Matches</p>
+                    <p id="total-matches" class="text-xl font-bold text-white">--</p>
+                </div>
+            </div>
+            <div class="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                <div id="progress-bar" class="h-full bg-primary rounded-full" style="width: 0%"></div>
+            </div>
+            <p id="progress-text" class="text-[10px] text-gray-500 mt-2">Loading match data...</p>
+        </section>
+
+        <!-- Team List Preview -->
+        <section class="space-y-3">
+            <div class="flex justify-between items-end">
+                <h3 class="text-white text-lg font-bold">Event Leaderboard</h3>
+                <a class="text-primary text-xs font-bold uppercase hover:underline" href="#" id="view-all-teams">View All Teams</a>
+            </div>
+            <div id="leaderboard" class="space-y-2">
+                <!-- Populated by PyScript -->
+                <div class="glass-card rounded-lg p-4 text-center text-gray-400">
+                    <p class="text-sm">Loading team rankings...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- My Team Tracking -->
+        <section id="my-team-section" class="space-y-3 hidden">
+            <h3 class="text-white text-lg font-bold">My Team Tracking (<span id="my-team-number"></span>)</h3>
+            <div class="glass-card rounded-xl p-5 border-l-4 border-l-primary">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-[10px] text-gray-400 uppercase">Current Rank</p>
+                        <p id="my-team-rank" class="text-2xl font-black text-white">--</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-gray-400 uppercase">Record</p>
+                        <p id="my-team-record" class="text-2xl font-black text-primary">--</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-gray-400 uppercase">Avg Score</p>
+                        <p id="my-team-avg" class="text-2xl font-black text-white">--</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-gray-400 uppercase">OPR</p>
+                        <p id="my-team-opr" class="text-2xl font-black text-white">--</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Upcoming Matches -->
+        <section class="bg-primary/5 border border-primary/20 rounded-xl p-5 overflow-hidden relative">
+            <div class="absolute -right-4 -top-4 opacity-10">
+                <span class="material-symbols-outlined !text-9xl">schedule</span>
+            </div>
+            <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-4">Upcoming Matches</h3>
+            <div id="upcoming-matches" class="space-y-4">
+                <div class="text-center text-gray-400 py-4">
+                    <p class="text-sm">Loading upcoming matches...</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 z-50 bg-background-dark/95 backdrop-blur-xl border-t border-primary/20 pb-safe">
+        <div class="flex h-16 w-full items-center justify-around px-2">
+            <a class="flex flex-1 flex-col items-center justify-center gap-1 text-primary" href="#">
+                <span class="material-symbols-outlined !text-2xl" style="font-variation-settings: 'FILL' 1">sports_esports</span>
+                <span class="text-[10px] font-bold uppercase tracking-tighter">Scout</span>
+            </a>
+            <a class="flex flex-1 flex-col items-center justify-center gap-1 text-gray-500 hover:text-primary transition-colors" href="#">
+                <span class="material-symbols-outlined !text-2xl">leaderboard</span>
+                <span class="text-[10px] font-bold uppercase tracking-tighter">Leaderboard</span>
+            </a>
+            <a class="flex flex-1 flex-col items-center justify-center gap-1 text-gray-500 hover:text-primary transition-colors" href="#">
+                <span class="material-symbols-outlined !text-2xl">target</span>
+                <span class="text-[10px] font-bold uppercase tracking-tighter">My Team</span>
+            </a>
+        </div>
+        <div class="h-4"></div>
+    </nav>
+
+    <!-- PyScript Code -->
+    <script type="py" src="./main.py" config="./pyscript.json"></script>
+
+</body>
 </html>
