@@ -1,0 +1,23 @@
+body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: #0a0e08;
+            color: white;
+            min-height: max(884px, 100dvh);
+        }
+        .glass-card {
+            background: rgba(25, 40, 20, 0.4);
+            border: 1px solid rgba(73, 246, 30, 0.1);
+        }
+        .neon-glow {
+            box-shadow: 0 0 15px rgba(73, 246, 30, 0.2);
+        }
+        .active-tab {
+            color: #49f61e;
+        }
+        .setup-step {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }

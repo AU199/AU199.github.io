@@ -59,6 +59,12 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        .view-container {
+            display: none;
+        }
+        .view-container.active {
+            display: block;
+        }
     </style>
 </head>
 <body class="bg-background-light dark:bg-background-dark min-h-screen flex flex-col">
@@ -241,7 +247,7 @@
         </div>
     </div>
 
-    <!-- Settings Modal (for later access) -->
+    <!-- Settings Modal -->
     <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] items-center justify-center p-4 hidden">
         <div class="bg-background-dark border-2 border-primary/30 rounded-xl p-6 max-w-md w-full">
             <div class="flex items-center justify-between mb-6">
@@ -320,123 +326,192 @@
         </div>
     </header>
 
-    <main class="flex-1 p-4 pb-24 max-w-2xl mx-auto w-full space-y-6">
-        <!-- Welcome Section -->
-        <section class="pt-2">
-            <h1 class="text-white text-3xl font-bold leading-tight">Command Center</h1>
-            <p id="event-status" class="text-gray-400 text-sm mt-1">Waiting for data...</p>
-        </section>
+    <!-- Main Content Area with Multiple Views -->
+    <div class="flex-1 pb-24">
+        
+        <!-- Scout View (Dashboard) -->
+        <div id="view-scout" class="view-container active">
+            <main class="p-4 max-w-2xl mx-auto w-full space-y-6">
+                <!-- Welcome Section -->
+                <section class="pt-2">
+                    <h1 class="text-white text-3xl font-bold leading-tight">Command Center</h1>
+                    <p id="event-status" class="text-gray-400 text-sm mt-1">Waiting for data...</p>
+                </section>
 
-        <!-- Quick Actions Grid -->
-        <!-- <section class="space-y-4">
-            <button class="w-full flex items-center justify-between p-6 bg-primary text-background-dark rounded-xl neon-glow transition-transform active:scale-95">
-                <div class="flex items-center gap-4">
-                    <div class="bg-black/10 p-3 rounded-lg">
-                        <span class="material-symbols-outlined !text-4xl font-bold">sports_esports</span>
+                <!-- Event Statistics -->
+                <section class="glass-card rounded-xl p-5">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-white text-xs font-bold uppercase tracking-widest text-primary/80">Event Statistics</h3>
+                        <span class="material-symbols-outlined text-primary text-sm">trending_up</span>
                     </div>
-                    <div class="text-left">
-                        <span class="block text-lg font-bold uppercase tracking-tighter">Start Match Scouting</span>
-                        <span class="text-xs font-medium opacity-70">Tap to begin recording live data</span>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="space-y-1">
+                            <p class="text-[10px] text-gray-400 uppercase">Avg Score</p>
+                            <p id="avg-score" class="text-xl font-bold text-white">--</p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-[10px] text-gray-400 uppercase">Total Teams</p>
+                            <p id="total-teams" class="text-xl font-bold text-white">--</p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-[10px] text-gray-400 uppercase">Matches</p>
+                            <p id="total-matches" class="text-xl font-bold text-white">--</p>
+                        </div>
                     </div>
-                </div>
-                <span class="material-symbols-outlined font-bold">play_circle</span>
-            </button>
-        </section> -->
+                    <div class="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div id="progress-bar" class="h-full bg-primary rounded-full" style="width: 0%"></div>
+                    </div>
+                    <p id="progress-text" class="text-[10px] text-gray-500 mt-2">Loading match data...</p>
+                </section>
 
-        <!-- Event Statistics -->
-        <section class="glass-card rounded-xl p-5">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-white text-xs font-bold uppercase tracking-widest text-primary/80">Event Statistics</h3>
-                <span class="material-symbols-outlined text-primary text-sm">trending_up</span>
-            </div>
-            <div class="grid grid-cols-3 gap-4">
-                <div class="space-y-1">
-                    <p class="text-[10px] text-gray-400 uppercase">Avg Score</p>
-                    <p id="avg-score" class="text-xl font-bold text-white">--</p>
-                </div>
-                <div class="space-y-1">
-                    <p class="text-[10px] text-gray-400 uppercase">Total Teams</p>
-                    <p id="total-teams" class="text-xl font-bold text-white">--</p>
-                </div>
-                <div class="space-y-1">
-                    <p class="text-[10px] text-gray-400 uppercase">Matches</p>
-                    <p id="total-matches" class="text-xl font-bold text-white">--</p>
-                </div>
-            </div>
-            <div class="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                <div id="progress-bar" class="h-full bg-primary rounded-full" style="width: 0%"></div>
-            </div>
-            <p id="progress-text" class="text-[10px] text-gray-500 mt-2">Loading match data...</p>
-        </section>
+                <!-- Team List Preview -->
+                <section class="space-y-3">
+                    <div class="flex justify-between items-end">
+                        <h3 class="text-white text-lg font-bold">Event Leaderboard</h3>
+                        <button class="text-primary text-xs font-bold uppercase hover:underline" id="view-all-teams">View All Teams</button>
+                    </div>
+                    <div id="leaderboard-preview" class="space-y-2">
+                        <div class="glass-card rounded-lg p-4 text-center text-gray-400">
+                            <p class="text-sm">Loading team rankings...</p>
+                        </div>
+                    </div>
+                </section>
 
-        <!-- Team List Preview -->
-        <section class="space-y-3">
-            <div class="flex justify-between items-end">
-                <h3 class="text-white text-lg font-bold">Event Leaderboard</h3>
-                <a class="text-primary text-xs font-bold uppercase hover:underline" href="#" id="view-all-teams">View All Teams</a>
-            </div>
-            <div id="leaderboard" class="space-y-2">
-                <!-- Populated by PyScript -->
-                <div class="glass-card rounded-lg p-4 text-center text-gray-400">
-                    <p class="text-sm">Loading team rankings...</p>
-                </div>
-            </div>
-        </section>
+                <!-- Upcoming Matches -->
+                <section class="bg-primary/5 border border-primary/20 rounded-xl p-5 overflow-hidden relative">
+                    <div class="absolute -right-4 -top-4 opacity-10">
+                        <span class="material-symbols-outlined !text-9xl">schedule</span>
+                    </div>
+                    <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-4">Upcoming Matches</h3>
+                    <div id="upcoming-matches" class="space-y-4">
+                        <div class="text-center text-gray-400 py-4">
+                            <p class="text-sm">Loading upcoming matches...</p>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
 
-        <!-- My Team Tracking -->
-        <section id="my-team-section" class="space-y-3 hidden">
-            <h3 class="text-white text-lg font-bold">My Team Tracking (<span id="my-team-number"></span>)</h3>
-            <div class="glass-card rounded-xl p-5 border-l-4 border-l-primary">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <p class="text-[10px] text-gray-400 uppercase">Current Rank</p>
-                        <p id="my-team-rank" class="text-2xl font-black text-white">--</p>
-                    </div>
-                    <div>
-                        <p class="text-[10px] text-gray-400 uppercase">Record</p>
-                        <p id="my-team-record" class="text-2xl font-black text-primary">--</p>
-                    </div>
-                    <div>
-                        <p class="text-[10px] text-gray-400 uppercase">Avg Score</p>
-                        <p id="my-team-avg" class="text-2xl font-black text-white">--</p>
-                    </div>
-                    <div>
-                        <p class="text-[10px] text-gray-400 uppercase">OPR</p>
-                        <p id="my-team-opr" class="text-2xl font-black text-white">--</p>
-                    </div>
-                </div>
-            </div>
-        </section>
+        <!-- Leaderboard View -->
+        <div id="view-leaderboard" class="view-container">
+            <main class="p-4 max-w-2xl mx-auto w-full space-y-6">
+                <section class="pt-2">
+                    <h1 class="text-white text-3xl font-bold leading-tight">Full Leaderboard</h1>
+                    <p class="text-gray-400 text-sm mt-1">Complete team rankings</p>
+                </section>
 
-        <!-- Upcoming Matches -->
-        <section class="bg-primary/5 border border-primary/20 rounded-xl p-5 overflow-hidden relative">
-            <div class="absolute -right-4 -top-4 opacity-10">
-                <span class="material-symbols-outlined !text-9xl">schedule</span>
-            </div>
-            <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-4">Upcoming Matches</h3>
-            <div id="upcoming-matches" class="space-y-4">
-                <div class="text-center text-gray-400 py-4">
-                    <p class="text-sm">Loading upcoming matches...</p>
+                <div id="full-leaderboard" class="space-y-2">
+                    <div class="glass-card rounded-lg p-4 text-center text-gray-400">
+                        <p class="text-sm">Loading all teams...</p>
+                    </div>
                 </div>
-            </div>
-        </section>
-    </main>
+            </main>
+        </div>
+
+        <!-- My Team View -->
+        <div id="view-myteam" class="view-container">
+            <main class="p-4 max-w-2xl mx-auto w-full space-y-6">
+                <section class="pt-2">
+                    <h1 class="text-white text-3xl font-bold leading-tight">My Team</h1>
+                    <p id="myteam-subtitle" class="text-gray-400 text-sm mt-1">Configure your team in settings</p>
+                </section>
+
+                <!-- Team Not Set Message -->
+                <div id="no-team-message" class="glass-card rounded-xl p-8 text-center">
+                    <span class="material-symbols-outlined text-primary !text-6xl mb-4">group_off</span>
+                    <h3 class="text-white text-xl font-bold mb-2">No Team Selected</h3>
+                    <p class="text-gray-400 text-sm mb-6">Set your team number in settings to track performance</p>
+                    <button id="open-settings-from-myteam" class="bg-primary text-background-dark font-bold py-3 px-6 rounded-lg hover:bg-primary/90 transition-colors">
+                        Open Settings
+                    </button>
+                </div>
+
+                <!-- My Team Content (hidden until team is set) -->
+                <div id="myteam-content" class="space-y-6 hidden">
+                    <!-- Team Header Card -->
+                    <section class="glass-card rounded-xl p-6 border-l-4 border-l-primary">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 class="text-white text-2xl font-bold">Team <span id="display-team-number">--</span></h2>
+                                <p class="text-gray-400 text-sm">Current Statistics</p>
+                            </div>
+                            <div class="text-primary flex size-14 items-center justify-center bg-primary/10 rounded-xl">
+                                <span class="material-symbols-outlined !text-4xl">emoji_events</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase">Current Rank</p>
+                                <p id="my-team-rank" class="text-3xl font-black text-white">--</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase">Record</p>
+                                <p id="my-team-record" class="text-3xl font-black text-primary">--</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase">Avg Score</p>
+                                <p id="my-team-avg" class="text-2xl font-black text-white">--</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase">OPR</p>
+                                <p id="my-team-opr" class="text-2xl font-black text-white">--</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Next Match -->
+                    <section class="bg-primary/5 border border-primary/20 rounded-xl p-5">
+                        <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-4">Next Match</h3>
+                        <div id="next-match-content">
+                            <div class="text-center text-gray-400 py-4">
+                                <p class="text-sm">No upcoming matches</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Previous Match Result -->
+                    <section class="glass-card rounded-xl p-5">
+                        <h3 class="text-white text-xs font-bold uppercase tracking-widest mb-4">Previous Match Result</h3>
+                        <div id="prev-match-content">
+                            <div class="text-center text-gray-400 py-4">
+                                <p class="text-sm">No previous matches</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Win Probability Card -->
+                    <section class="glass-card rounded-xl p-5 border-2 border-primary/30">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-white text-xs font-bold uppercase tracking-widest">Next Match Win Probability</h3>
+                            <span class="material-symbols-outlined text-primary">psychology</span>
+                        </div>
+                        <div id="win-probability-content">
+                            <div class="text-center text-gray-400 py-4">
+                                <p class="text-sm">No upcoming match to analyze</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+
+    </div>
 
     <!-- Bottom Navigation Bar -->
     <nav class="fixed bottom-0 left-0 right-0 z-50 bg-background-dark/95 backdrop-blur-xl border-t border-primary/20 pb-safe">
         <div class="flex h-16 w-full items-center justify-around px-2">
-            <a class="flex flex-1 flex-col items-center justify-center gap-1 text-primary" href="#">
+            <button id="nav-scout" class="nav-btn flex flex-1 flex-col items-center justify-center gap-1 text-primary" data-view="scout">
                 <span class="material-symbols-outlined !text-2xl" style="font-variation-settings: 'FILL' 1">sports_esports</span>
                 <span class="text-[10px] font-bold uppercase tracking-tighter">Scout</span>
-            </a>
-            <a class="flex flex-1 flex-col items-center justify-center gap-1 text-gray-500 hover:text-primary transition-colors" href="#">
+            </button>
+            <button id="nav-leaderboard" class="nav-btn flex flex-1 flex-col items-center justify-center gap-1 text-gray-500 hover:text-primary transition-colors" data-view="leaderboard">
                 <span class="material-symbols-outlined !text-2xl">leaderboard</span>
                 <span class="text-[10px] font-bold uppercase tracking-tighter">Leaderboard</span>
-            </a>
-            <a class="flex flex-1 flex-col items-center justify-center gap-1 text-gray-500 hover:text-primary transition-colors" href="#">
+            </button>
+            <button id="nav-myteam" class="nav-btn flex flex-1 flex-col items-center justify-center gap-1 text-gray-500 hover:text-primary transition-colors" data-view="myteam">
                 <span class="material-symbols-outlined !text-2xl">target</span>
                 <span class="text-[10px] font-bold uppercase tracking-tighter">My Team</span>
-            </a>
+            </button>
         </div>
         <div class="h-4"></div>
     </nav>
