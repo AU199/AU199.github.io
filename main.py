@@ -106,17 +106,90 @@ class TBAClient:
         return await self.make_request(f"event/{self.event_key}/oprs")
 
 
+class StatboticsClient:
+    """Client for Statbotics REST API v3"""
+    
+    BASE_URL = "https://api.statbotics.io/v3"
+    
+    async def make_request(self, endpoint):
+        url = f"{self.BASE_URL}/{endpoint}"
+        try:
+            console.log(f"[Statbotics] GET {url}")
+            response = await fetch(url)
+            
+            if response.status == 200:
+                data = await response.json()
+                return data.to_py()
+            else:
+                err = await response.text()
+                console.error(f"[Statbotics] {response.status}: {err}")
+                return None
+        except Exception as e:
+            console.error(f"[Statbotics] request failed: {e}")
+            return None
+
+    # ---------- EVENT ----------
+    async def get_event_teams(self, event_key):
+        """
+        Returns list of teams at event with EPA fields
+        REST: /event_teams/{event}
+        """
+        return await self.make_request(f"event_teams/{event_key}")
+
+    async def get_event_matches(self, event_key):
+        """
+        All matches with predictions
+        REST: /event_matches/{event}
+        """
+        return await self.make_request(f"event_matches/{event_key}")
+
+    # ---------- TEAM ----------
+    async def get_team_event(self, team, event_key):
+        """
+        EPA for one team at event
+        REST: /team_event/{team}/{event}
+        """
+        return await self.make_request(f"team_event/{team}/{event_key}")
+
+    async def get_team_matches(self, team, event_key):
+        """
+        Team match history at event
+        REST: /team_matches/{team}/{event}
+        """
+        return await self.make_request(f"team_matches/{team}/{event_key}")
+
+    # ---------- MATCH ----------
+    async def get_match(self, match_key):
+        """
+        Match prediction
+        REST: /match/{match}
+        """
+        return await self.make_request(f"match/{match_key}")
+
 class Dashboard:
     """Main dashboard controller"""
     
     def __init__(self):
         self.client = TBAClient()
-        self.current_view = 'scout'
+        self.statbotics = StatboticsClient()
+
+        self.current_view = "scout"
+
         self.matches_data = None
         self.rankings_data = None
         self.oprs_data = None
+
+        # Statbotics
+        self.epa_data = None          # event teams EPA
+        self.my_team_epa = None       # single team EPA
+        self.my_team_matches = None   # matches for my team
+
+        self.current_filter = "all"
+        self.epa_type = "normal"
+
         self.setup_ui()
         self.check_initial_setup()
+
     
     def setup_ui(self):
         """Setup UI event handlers"""
@@ -164,6 +237,26 @@ class Dashboard:
         open_settings_myteam = document.getElementById('open-settings-from-myteam')
         if open_settings_myteam:
             open_settings_myteam.addEventListener('click', create_proxy(self.open_settings))
+        
+        # Schedule filter buttons
+        filter_btns = document.querySelectorAll('.schedule-filter-btn')
+        for btn in filter_btns:
+            btn.addEventListener('click', create_proxy(self.filter_schedule))
+        
+        # Alliance builder EPA type selector
+        epa_btns = document.querySelectorAll('.epa-type-btn')
+        for btn in epa_btns:
+            btn.addEventListener('click', create_proxy(self.switch_epa_type))
+        
+        # Calculate matchup button
+        calc_btn = document.getElementById('calculate-matchup')
+        if calc_btn:
+            calc_btn.addEventListener('click', create_proxy(self.calculate_custom_matchup))
+        
+        # Back from analysis button
+        back_btn = document.getElementById('back-from-analysis')
+        if back_btn:
+            back_btn.addEventListener('click', create_proxy(lambda e: self.navigate_to('schedule')))
     
     def switch_view(self, event):
         """Switch between views"""
@@ -211,6 +304,12 @@ class Dashboard:
             asyncio.create_task(self.load_full_leaderboard())
         elif view_name == 'myteam':
             asyncio.create_task(self.load_my_team_view())
+        elif view_name == 'schedule':
+            asyncio.create_task(self.load_schedule_view())
+        elif view_name == 'builder':
+            # Load EPA data for builder if not loaded
+            if not self.epa_data:
+                asyncio.create_task(self.load_epa_data())
     
     def check_initial_setup(self):
         """Check if initial setup is needed"""
@@ -618,13 +717,17 @@ class Dashboard:
                 avg = sum(team_scores) / len(team_scores)
                 document.getElementById('my-team-avg').textContent = f"{avg:.1f}"
         
-        # Get OPR
-        if not self.oprs_data:
-            self.oprs_data = await self.client.get_event_oprs()
+        # Get EPA from Statbotics
+        if not self.epa_data:
+            await self.load_epa_data()
         
-        if self.oprs_data:
-            opr = self.oprs_data.get('oprs', {}).get(team_key, 0)
-            document.getElementById('my-team-opr').textContent = f"{opr:.1f}"
+        if self.epa_data:
+            team_num_str = self.client.team_number
+            for team_data in self.epa_data:
+                if str(team_data.get('team', '')) == team_num_str:
+                    epa = team_data.get('epa_end', 0)
+                    document.getElementById('my-team-epa').textContent = f"{epa:.1f}"
+                    break
         
         # Load next and previous matches
         await self.load_my_team_matches(team_key)
@@ -777,33 +880,49 @@ class Dashboard:
         
         container.innerHTML = html
     
-    def calculate_win_probability(self, match, team_key):
-        """Calculate and display win probability for next match"""
+    async def calculate_win_probability(self, match, team_key):
+        """Calculate and display win probability for next match using Statbotics EPA"""
         container = document.getElementById('win-probability-content')
         
-        if not match or not self.oprs_data:
+        if not match:
             container.innerHTML = '<div class="text-center text-gray-400 py-4"><p class="text-sm">No upcoming match to analyze</p></div>'
             return
         
-        oprs = self.oprs_data.get('oprs', {})
+        # Load EPA data if not available
+        if not self.epa_data:
+            await self.load_epa_data()
+        
+        if not self.epa_data:
+            container.innerHTML = '<div class="text-center text-gray-400 py-4"><p class="text-sm">EPA data not available</p></div>'
+            return
         
         alliances = match.get('alliances', {})
         red_teams = alliances.get('red', {}).get('team_keys', [])
         blue_teams = alliances.get('blue', {}).get('team_keys', [])
         
-        # Calculate alliance OPRs
-        red_opr = sum([oprs.get(t, 0) for t in red_teams])
-        blue_opr = sum([oprs.get(t, 0) for t in blue_teams])
+        # Calculate alliance EPAs
+        red_epa = 0
+        blue_epa = 0
+        
+        for team_data in self.epa_data:
+            team_num = team_data.get('team', '')
+            team_frc_key = f"frc{team_num}"
+            # Use epa_end for current EPA at event
+            epa = team_data.get('epa_end', 0)
+            
+            if team_frc_key in red_teams:
+                red_epa += epa
+            elif team_frc_key in blue_teams:
+                blue_epa += epa
         
         # Determine our alliance
         our_color = 'red' if team_key in red_teams else 'blue'
-        our_opr = red_opr if our_color == 'red' else blue_opr
-        opp_opr = blue_opr if our_color == 'red' else red_opr
+        our_epa = red_epa if our_color == 'red' else blue_epa
+        opp_epa = blue_epa if our_color == 'red' else red_epa
         
-        # Simple win probability based on OPR difference
-        # Using logistic function for probability
-        if our_opr + opp_opr > 0:
-            win_prob = our_opr / (our_opr + opp_opr) * 100
+        # Calculate win probability using EPA
+        if our_epa + opp_epa > 0:
+            win_prob = our_epa / (our_epa + opp_epa) * 100
         else:
             win_prob = 50
         
@@ -832,12 +951,12 @@ class Dashboard:
         
         <div class="bg-white/5 rounded-lg p-4 mb-4">
             <div class="flex justify-between mb-2">
-                <span class="text-xs text-gray-400">Your Alliance OPR</span>
-                <span class="text-xs text-white font-bold">{our_opr:.1f}</span>
+                <span class="text-xs text-gray-400">Your Alliance EPA</span>
+                <span class="text-xs text-white font-bold">{our_epa:.1f}</span>
             </div>
             <div class="flex justify-between">
-                <span class="text-xs text-gray-400">Opponent OPR</span>
-                <span class="text-xs text-white font-bold">{opp_opr:.1f}</span>
+                <span class="text-xs text-gray-400">Opponent EPA</span>
+                <span class="text-xs text-white font-bold">{opp_epa:.1f}</span>
             </div>
         </div>
         
@@ -845,10 +964,491 @@ class Dashboard:
             <div class="{bar_color} h-full rounded-full transition-all duration-1000" style="width: {win_prob}%"></div>
         </div>
         
-        <p class="text-[10px] text-gray-500 mt-3 text-center">Probability based on alliance OPR comparison</p>
+        <p class="text-[10px] text-gray-500 mt-3 text-center">Probability based on Statbotics EPA</p>
         '''
         
         container.innerHTML = html
+
+
+    async def load_schedule_view(self):
+        """Load match schedule view"""
+        if not self.matches_data:
+            self.matches_data = await self.client.get_event_matches()
+        
+        # Load EPA data if not already loaded
+        if not self.epa_data and self.client.event_key:
+            await self.load_epa_data()
+        
+        self.render_schedule(self.current_filter)
+    
+    async def load_epa_data(self):
+            """Load Statbotics EPA for entire event (cached)"""
+            if self.epa_data:
+                return self.epa_data
+
+            event_key = self.client.event_key
+            if not event_key:
+                return None
+
+            console.log(f"[Dashboard] Loading EPA for {event_key}")
+            self.epa_data = await self.statbotics.get_event_teams(event_key)
+
+            if not self.epa_data:
+                console.error("[Dashboard] EPA load failed")
+                self.epa_data = []
+
+            return self.epa_data
+    async def load_my_team_data(self):
+        """Load Statbotics data for my team"""
+        team_num = int(self.client.team_number)
+        event_key = self.client.event_key
+
+        if not team_num or not event_key:
+            return
+
+        console.log(f"[Dashboard] Loading my team {team_num}")
+
+        self.my_team_epa = await self.statbotics.get_team_event(
+            team_num, event_key
+        )
+
+        self.my_team_matches = await self.statbotics.get_team_matches(
+            team_num, event_key
+        )
+        
+        
+    def filter_schedule(self, event):
+        """Filter schedule view"""
+        btn = event.currentTarget
+        filter_type = btn.getAttribute('data-filter')
+        self.current_filter = filter_type
+        
+        # Update button styles
+        filter_btns = document.querySelectorAll('.schedule-filter-btn')
+        for b in filter_btns:
+            b.classList.remove('bg-primary', 'text-background-dark')
+            b.classList.add('bg-white/5', 'text-white')
+        
+        btn.classList.remove('bg-white/5', 'text-white')
+        btn.classList.add('bg-primary', 'text-background-dark')
+        
+        # Re-render schedule
+        self.render_schedule(filter_type)
+    
+    def render_schedule(self, filter_type):
+        """Render match schedule based on filter"""
+        if not self.matches_data:
+            return
+        
+        qual_matches = [m for m in self.matches_data if m.get('comp_level') == 'qm']
+        qual_matches.sort(key=lambda x: x.get('match_number', 0))
+        
+        # Apply filter
+        if filter_type == 'upcoming':
+            matches = [m for m in qual_matches if not m.get('actual_time')]
+        elif filter_type == 'completed':
+            matches = [m for m in qual_matches if m.get('actual_time')]
+        elif filter_type == 'myteam':
+            if self.client.team_number:
+                team_key = f"frc{self.client.team_number}"
+                matches = []
+                for m in qual_matches:
+                    alliances = m.get('alliances', {})
+                    red_teams = alliances.get('red', {}).get('team_keys', [])
+                    blue_teams = alliances.get('blue', {}).get('team_keys', [])
+                    if team_key in red_teams or team_key in blue_teams:
+                        matches.append(m)
+            else:
+                matches = []
+        else:  # 'all'
+            matches = qual_matches
+        
+        container = document.getElementById('schedule-matches')
+        
+        if not matches:
+            container.innerHTML = '<div class="glass-card rounded-lg p-4 text-center text-gray-400"><p class="text-sm">No matches found</p></div>'
+            return
+        
+        html = ''
+        for match in matches:
+            html += self.render_match_card(match)
+        
+        container.innerHTML = html
+        
+        # Add click handlers to match cards
+        match_cards = document.querySelectorAll('.match-card')
+        for card in match_cards:
+            card.addEventListener('click', create_proxy(self.view_match_analysis))
+    
+    def render_match_card(self, match):
+        """Render a single match card"""
+        match_num = match.get('match_number', '?')
+        match_key = match.get('key', '')
+        
+        alliances = match.get('alliances', {})
+        red_teams = alliances.get('red', {}).get('team_keys', [])
+        blue_teams = alliances.get('blue', {}).get('team_keys', [])
+        
+        red_nums = ', '.join([t.replace('frc', '') for t in red_teams])
+        blue_nums = ', '.join([t.replace('frc', '') for t in blue_teams])
+        
+        # Check if completed
+        is_completed = match.get('actual_time') is not None
+        
+        if is_completed:
+            red_score = alliances.get('red', {}).get('score', 0)
+            blue_score = alliances.get('blue', {}).get('score', 0)
+            
+            red_class = 'text-primary font-bold' if red_score > blue_score else 'text-gray-400'
+            blue_class = 'text-primary font-bold' if blue_score > red_score else 'text-gray-400'
+            
+            scores_html = f'''
+            <div class="flex gap-4 text-center">
+                <div>
+                    <p class="text-xs text-gray-400 uppercase">Red</p>
+                    <p class="text-2xl font-black {red_class}">{red_score}</p>
+                </div>
+                <span class="text-gray-500 self-center">-</span>
+                <div>
+                    <p class="text-xs text-gray-400 uppercase">Blue</p>
+                    <p class="text-2xl font-black {blue_class}">{blue_score}</p>
+                </div>
+            </div>
+            '''
+        else:
+            scores_html = '<p class="text-xs text-gray-500 uppercase">Not Played</p>'
+        
+        return f'''
+        <div class="match-card glass-card rounded-lg p-4 cursor-pointer hover:border-primary/30 border border-transparent transition-colors" data-match-key="{match_key}">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 uppercase">Match</p>
+                        <p class="text-xl font-black text-white leading-none">Q{match_num}</p>
+                    </div>
+                    <div class="flex-1">
+                        <div class="mb-2">
+                            <p class="text-[10px] text-red-400 uppercase font-bold">Red</p>
+                            <p class="text-sm text-white">{red_nums}</p>
+                        </div>
+                        <div>
+                            <p class="text-[10px] text-blue-400 uppercase font-bold">Blue</p>
+                            <p class="text-sm text-white">{blue_nums}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    {scores_html}
+                    <span class="material-symbols-outlined text-primary">arrow_forward_ios</span>
+                </div>
+            </div>
+        </div>
+        '''
+    
+    async def view_match_analysis(self, event):
+        """View detailed match analysis"""
+        card = event.currentTarget
+        match_key = card.getAttribute('data-match-key')
+        
+        if not match_key:
+            return
+        
+        # Find the match
+        match = None
+        for m in self.matches_data:
+            if m.get('key') == match_key:
+                match = m
+                break
+        
+        if not match:
+            return
+        
+        # Switch to analysis view
+        views = document.querySelectorAll('.view-container')
+        for view in views:
+            view.classList.remove('active')
+        
+        analysis_view = document.getElementById('view-match-analysis')
+        if analysis_view:
+            analysis_view.classList.add('active')
+        
+        # Render match analysis
+        await self.render_match_analysis(match)
+    
+    async def render_match_analysis(self, match):
+        """Render detailed match analysis using Statbotics EPA"""
+        container = document.getElementById('match-analysis-content')
+        
+        if not self.epa_data:
+            await self.load_epa_data()
+        
+        match_num = match.get('match_number', '?')
+        alliances = match.get('alliances', {})
+        
+        red_teams = alliances.get('red', {}).get('team_keys', [])
+        blue_teams = alliances.get('blue', {}).get('team_keys', [])
+        
+        # Calculate EPA totals
+        red_epa_total = 0
+        blue_epa_total = 0
+        red_unitless_total = 0
+        blue_unitless_total = 0
+        
+        # Get EPA for each team
+        red_team_epas = []
+        blue_team_epas = []
+        
+        if self.epa_data:
+            for team_data in self.epa_data:
+                team_num = team_data.get('team', '')
+                team_key = f"frc{team_num}"
+                # Use epa_end for current EPA at this event
+                epa = team_data.get('epa_end', 0)
+                # Use norm_epa_end for normalized/unitless EPA
+                unitless = team_data.get('norm_epa_end', 0)
+                
+                if team_key in red_teams:
+                    red_epa_total += epa
+                    red_unitless_total += unitless
+                    red_team_epas.append((team_key, epa, unitless))
+                elif team_key in blue_teams:
+                    blue_epa_total += epa
+                    blue_unitless_total += unitless
+                    blue_team_epas.append((team_key, epa, unitless))
+        
+        # Calculate win probability using EPA
+        if red_epa_total + blue_epa_total > 0:
+            red_win_prob = red_epa_total / (red_epa_total + blue_epa_total) * 100
+        else:
+            red_win_prob = 50
+        
+        blue_win_prob = 100 - red_win_prob
+        
+        # Determine winner
+        winner = 'RED' if red_win_prob > 50 else 'BLUE'
+        winner_class = 'text-red-400' if winner == 'RED' else 'text-blue-400'
+        
+        # Expected scores (EPA predicts point contribution)
+        red_expected_score = red_epa_total if red_epa_total > 0 else 0
+        blue_expected_score = blue_epa_total if blue_epa_total > 0 else 0
+        
+        # Build team details HTML
+        red_teams_html = ''
+        for team_key, epa, unitless in red_team_epas:
+            team_num = team_key.replace('frc', '')
+            red_teams_html += f'''
+            <div class="flex justify-between items-center p-2 bg-black/20 rounded">
+                <span class="text-white font-bold">{team_num}</span>
+                <div class="text-right">
+                    <p class="text-xs text-gray-400">EPA: <span class="text-white">{epa:.1f}</span></p>
+                    <p class="text-[10px] text-gray-500">Norm: {unitless:.1f}</p>
+                </div>
+            </div>
+            '''
+        
+        blue_teams_html = ''
+        for team_key, epa, unitless in blue_team_epas:
+            team_num = team_key.replace('frc', '')
+            blue_teams_html += f'''
+            <div class="flex justify-between items-center p-2 bg-black/20 rounded">
+                <span class="text-white font-bold">{team_num}</span>
+                <div class="text-right">
+                    <p class="text-xs text-gray-400">EPA: <span class="text-white">{epa:.1f}</span></p>
+                    <p class="text-[10px] text-gray-500">Norm: {unitless:.1f}</p>
+                </div>
+            </div>
+            '''
+        
+        html = f'''
+        <section class="glass-card rounded-xl p-6">
+            <div class="text-center mb-6">
+                <p class="text-xs text-gray-400 uppercase">Qualification Match</p>
+                <h2 class="text-4xl font-black text-white mb-2">Q{match_num}</h2>
+                <p class="text-sm text-gray-400">Powered by Statbotics EPA</p>
+            </div>
+            
+            <div class="text-center mb-6">
+                <p class="text-sm text-gray-400 mb-2">Predicted Winner</p>
+                <p class="{winner_class} text-6xl font-black">{winner}</p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="text-center">
+                    <p class="text-xs text-gray-400 uppercase">Red Win %</p>
+                    <p class="text-3xl font-bold text-red-400">{red_win_prob:.1f}%</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-gray-400 uppercase">Blue Win %</p>
+                    <p class="text-3xl font-bold text-blue-400">{blue_win_prob:.1f}%</p>
+                </div>
+            </div>
+            
+            <div class="h-4 w-full bg-white/5 rounded-full overflow-hidden mb-6">
+                <div class="h-full bg-gradient-to-r from-red-500 to-blue-500 rounded-full transition-all duration-1000" style="width: {red_win_prob}%"></div>
+            </div>
+        </section>
+        
+        <section class="bg-red-500/10 border-2 border-red-500/30 rounded-xl p-5">
+            <h3 class="text-red-400 text-sm font-bold uppercase tracking-widest mb-4">Red Alliance</h3>
+            <div class="space-y-2 mb-4">
+                {red_teams_html}
+            </div>
+            <div class="bg-black/40 rounded-lg p-3">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p class="text-gray-400">Total EPA</p>
+                        <p class="text-white font-bold text-lg">{red_epa_total:.1f}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400">Expected Score</p>
+                        <p class="text-white font-bold text-lg">{red_expected_score:.0f}</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="bg-blue-500/10 border-2 border-blue-500/30 rounded-xl p-5">
+            <h3 class="text-blue-400 text-sm font-bold uppercase tracking-widest mb-4">Blue Alliance</h3>
+            <div class="space-y-2 mb-4">
+                {blue_teams_html}
+            </div>
+            <div class="bg-black/40 rounded-lg p-3">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p class="text-gray-400">Total EPA</p>
+                        <p class="text-white font-bold text-lg">{blue_epa_total:.1f}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400">Expected Score</p>
+                        <p class="text-white font-bold text-lg">{blue_expected_score:.0f}</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="glass-card rounded-xl p-5">
+            <h3 class="text-white text-xs font-bold uppercase tracking-widest mb-3">About EPA</h3>
+            <p class="text-xs text-gray-400 mb-2">
+                <span class="text-primary font-bold">EPA (Expected Points Added)</span> measures how many points a team is expected to contribute to their alliance's score.
+            </p>
+            <p class="text-xs text-gray-400">
+                <span class="text-primary font-bold">Normalized EPA</span> is adjusted for seasonal strength, making it comparable across different years.
+            </p>
+        </section>
+        '''
+        
+        container.innerHTML = html
+    
+    def switch_epa_type(self, event):
+        """Switch between EPA and Unitless EPA"""
+        btn = event.currentTarget
+        epa_type = btn.getAttribute('data-type')
+        self.epa_type = epa_type
+        
+        # Update button styles
+        epa_btns = document.querySelectorAll('.epa-type-btn')
+        for b in epa_btns:
+            b.classList.remove('bg-primary', 'text-background-dark')
+            b.classList.add('bg-white/5', 'text-white')
+        
+        btn.classList.remove('bg-white/5', 'text-white')
+        btn.classList.add('bg-primary', 'text-background-dark')
+    
+    async def calculate_custom_matchup(self, event):
+        """Calculate win probability for custom alliance matchup"""
+        # Get team numbers
+        red_teams = [
+            document.getElementById('red-team-1').value.strip(),
+            document.getElementById('red-team-2').value.strip(),
+            document.getElementById('red-team-3').value.strip()
+        ]
+        
+        blue_teams = [
+            document.getElementById('blue-team-1').value.strip(),
+            document.getElementById('blue-team-2').value.strip(),
+            document.getElementById('blue-team-3').value.strip()
+        ]
+        
+        # Validate input
+        red_teams = [t for t in red_teams if t]
+        blue_teams = [t for t in blue_teams if t]
+        
+        if len(red_teams) == 0 or len(blue_teams) == 0:
+            return
+        
+        # Load EPA data if needed
+        if not self.epa_data:
+            await self.load_epa_data()
+        
+        if not self.epa_data:
+            return
+        
+        # Calculate EPA totals
+        red_epa = 0
+        blue_epa = 0
+        red_norm_epa = 0
+        blue_norm_epa = 0
+        
+        for team_data in self.epa_data:
+            team_num = str(team_data.get('team', ''))
+            # Use epa_end for current EPA
+            epa = team_data.get('epa_end', 0)
+            # Use norm_epa_end for normalized EPA
+            norm_epa = team_data.get('norm_epa_end', 0)
+            
+            if team_num in red_teams:
+                red_epa += epa
+                red_norm_epa += norm_epa
+            elif team_num in blue_teams:
+                blue_epa += epa
+                blue_norm_epa += norm_epa
+        
+        # Use selected EPA type
+        if self.epa_type == 'unitless':
+            red_value = red_norm_epa
+            blue_value = blue_norm_epa
+        else:
+            red_value = red_epa
+            blue_value = blue_epa
+        
+        # Calculate win probability
+        if red_value + blue_value > 0:
+            red_win_prob = red_value / (red_value + blue_value) * 100
+        else:
+            red_win_prob = 50
+        
+        blue_win_prob = 100 - red_win_prob
+        
+        # Determine winner
+        winner = 'RED' if red_win_prob > 50 else 'BLUE'
+        winner_class = 'text-red-400' if winner == 'RED' else 'text-blue-400'
+        
+        # Show results
+        prediction_section = document.getElementById('builder-prediction')
+        prediction_section.classList.remove('hidden')
+        
+        document.getElementById('winner-display').textContent = winner
+        document.getElementById('winner-display').className = f'text-6xl font-black mb-2 {winner_class}'
+        
+        document.getElementById('red-win-prob').textContent = f'{red_win_prob:.1f}%'
+        document.getElementById('blue-win-prob').textContent = f'{blue_win_prob:.1f}%'
+        
+        document.getElementById('builder-red-epa').textContent = f'{red_epa:.1f}' if self.epa_type == 'normal' else f'{red_norm_epa:.1f}'
+        document.getElementById('builder-blue-epa').textContent = f'{blue_epa:.1f}' if self.epa_type == 'normal' else f'{blue_norm_epa:.1f}'
+        
+        document.getElementById('builder-red-score').textContent = f'{red_epa:.0f}' if red_epa > 0 else '--'
+        document.getElementById('builder-blue-score').textContent = f'{blue_epa:.0f}' if blue_epa > 0 else '--'
+        
+        # Update progress bar
+        bar = document.getElementById('builder-prob-bar')
+        bar.style.width = f'{red_win_prob}%'
+        
+        # Show alliance stats
+        document.getElementById('red-alliance-stats').classList.remove('hidden')
+        document.getElementById('blue-alliance-stats').classList.remove('hidden')
+        
+        document.getElementById('red-total-epa').textContent = f'{red_epa:.1f}' if self.epa_type == 'normal' else f'{red_norm_epa:.1f}'
+        document.getElementById('blue-total-epa').textContent = f'{blue_epa:.1f}' if self.epa_type == 'normal' else f'{blue_norm_epa:.1f}'
 
 
 # Initialize dashboard when page loads

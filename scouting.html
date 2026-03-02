@@ -453,8 +453,8 @@
                                 <p id="my-team-avg" class="text-2xl font-black text-white">--</p>
                             </div>
                             <div>
-                                <p class="text-[10px] text-gray-400 uppercase">OPR</p>
-                                <p id="my-team-opr" class="text-2xl font-black text-white">--</p>
+                                <p class="text-[10px] text-gray-400 uppercase">EPA</p>
+                                <p id="my-team-epa" class="text-2xl font-black text-white">--</p>
                             </div>
                         </div>
                     </section>
@@ -495,6 +495,161 @@
             </main>
         </div>
 
+        <!-- Match Schedule View -->
+        <div id="view-schedule" class="view-container">
+            <main class="p-4 max-w-2xl mx-auto w-full space-y-6">
+                <section class="pt-2">
+                    <h1 class="text-white text-3xl font-bold leading-tight">Match Schedule</h1>
+                    <p class="text-gray-400 text-sm mt-1">All qualification matches</p>
+                </section>
+
+                <!-- Filter Options -->
+                <section class="glass-card rounded-xl p-4">
+                    <div class="flex gap-2 overflow-x-auto">
+                        <button class="schedule-filter-btn px-4 py-2 rounded-lg text-xs font-bold bg-primary text-background-dark" data-filter="all">
+                            All Matches
+                        </button>
+                        <button class="schedule-filter-btn px-4 py-2 rounded-lg text-xs font-bold bg-white/5 text-white" data-filter="upcoming">
+                            Upcoming
+                        </button>
+                        <button class="schedule-filter-btn px-4 py-2 rounded-lg text-xs font-bold bg-white/5 text-white" data-filter="completed">
+                            Completed
+                        </button>
+                        <button id="myteam-filter-btn" class="schedule-filter-btn px-4 py-2 rounded-lg text-xs font-bold bg-white/5 text-white" data-filter="myteam">
+                            My Team
+                        </button>
+                    </div>
+                </section>
+
+                <div id="schedule-matches" class="space-y-3">
+                    <div class="glass-card rounded-lg p-4 text-center text-gray-400">
+                        <p class="text-sm">Loading match schedule...</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Match Analysis View -->
+        <div id="view-match-analysis" class="view-container">
+            <main class="p-4 max-w-2xl mx-auto w-full space-y-6">
+                <section class="pt-2 flex items-center gap-3">
+                    <button id="back-from-analysis" class="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors">
+                        <span class="material-symbols-outlined">arrow_back</span>
+                    </button>
+                    <div>
+                        <h1 class="text-white text-3xl font-bold leading-tight">Match Analysis</h1>
+                        <p id="analysis-subtitle" class="text-gray-400 text-sm mt-1">Powered by Statbotics EPA</p>
+                    </div>
+                </section>
+
+                <div id="match-analysis-content">
+                    <!-- Content loaded dynamically -->
+                </div>
+            </main>
+        </div>
+
+        <!-- Alliance Builder View -->
+        <div id="view-builder" class="view-container">
+            <main class="p-4 max-w-2xl mx-auto w-full space-y-6">
+                <section class="pt-2">
+                    <h1 class="text-white text-3xl font-bold leading-tight">Alliance Builder</h1>
+                    <p class="text-gray-400 text-sm mt-1">Build custom alliances and predict outcomes</p>
+                </section>
+
+                <!-- EPA Type Selector -->
+                <section class="glass-card rounded-xl p-4">
+                    <label class="text-xs text-gray-400 uppercase font-bold block mb-3">Prediction Method</label>
+                    <div class="flex gap-2">
+                        <button id="epa-normal" class="epa-type-btn flex-1 px-4 py-3 rounded-lg text-sm font-bold bg-primary text-background-dark" data-type="normal">
+                            EPA
+                        </button>
+                        <button id="epa-unitless" class="epa-type-btn flex-1 px-4 py-3 rounded-lg text-sm font-bold bg-white/5 text-white" data-type="unitless">
+                            Unitless EPA
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-2">EPA: Expected Points Added • Unitless: Normalized strength rating</p>
+                </section>
+
+                <!-- Red Alliance Builder -->
+                <section class="bg-red-500/10 border-2 border-red-500/30 rounded-xl p-5">
+                    <h3 class="text-red-400 text-xs font-bold uppercase tracking-widest mb-4">Red Alliance</h3>
+                    <div class="space-y-2">
+                        <input type="text" id="red-team-1" placeholder="Team 1" class="w-full bg-black/40 border border-red-500/30 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500">
+                        <input type="text" id="red-team-2" placeholder="Team 2" class="w-full bg-black/40 border border-red-500/30 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500">
+                        <input type="text" id="red-team-3" placeholder="Team 3" class="w-full bg-black/40 border border-red-500/30 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500">
+                    </div>
+                    <div id="red-alliance-stats" class="mt-4 hidden">
+                        <div class="bg-black/40 rounded-lg p-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-gray-400">Total EPA</span>
+                                <span id="red-total-epa" class="text-lg font-bold text-white">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Blue Alliance Builder -->
+                <section class="bg-blue-500/10 border-2 border-blue-500/30 rounded-xl p-5">
+                    <h3 class="text-blue-400 text-xs font-bold uppercase tracking-widest mb-4">Blue Alliance</h3>
+                    <div class="space-y-2">
+                        <input type="text" id="blue-team-1" placeholder="Team 1" class="w-full bg-black/40 border border-blue-500/30 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500">
+                        <input type="text" id="blue-team-2" placeholder="Team 2" class="w-full bg-black/40 border border-blue-500/30 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500">
+                        <input type="text" id="blue-team-3" placeholder="Team 3" class="w-full bg-black/40 border border-blue-500/30 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div id="blue-alliance-stats" class="mt-4 hidden">
+                        <div class="bg-black/40 rounded-lg p-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-gray-400">Total EPA</span>
+                                <span id="blue-total-epa" class="text-lg font-bold text-white">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Calculate Button -->
+                <button id="calculate-matchup" class="w-full bg-primary text-background-dark font-bold py-4 rounded-lg hover:bg-primary/90 transition-colors neon-glow">
+                    Calculate Win Probability
+                </button>
+
+                <!-- Prediction Result -->
+                <section id="builder-prediction" class="glass-card rounded-xl p-6 border-2 border-primary/30 hidden">
+                    <div class="text-center mb-4">
+                        <h3 class="text-white text-xs font-bold uppercase tracking-widest mb-4">Prediction</h3>
+                        <div id="winner-display" class="text-6xl font-black mb-2">--</div>
+                        <p class="text-gray-400 text-sm">Predicted Winner</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="text-center">
+                            <p class="text-xs text-gray-400 uppercase">Red Win %</p>
+                            <p id="red-win-prob" class="text-2xl font-bold text-red-400">--</p>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-xs text-gray-400 uppercase">Blue Win %</p>
+                            <p id="blue-win-prob" class="text-2xl font-bold text-blue-400">--</p>
+                        </div>
+                    </div>
+
+                    <div class="h-3 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div id="builder-prob-bar" class="h-full bg-gradient-to-r from-red-500 to-blue-500 rounded-full transition-all duration-1000" style="width: 50%"></div>
+                    </div>
+
+                    <div class="mt-4 bg-black/40 rounded-lg p-3">
+                        <div class="grid grid-cols-2 gap-4 text-xs">
+                            <div>
+                                <p class="text-gray-400 mb-1">Red EPA: <span id="builder-red-epa" class="text-white font-bold">--</span></p>
+                                <p class="text-gray-400">Red Score: <span id="builder-red-score" class="text-white font-bold">--</span></p>
+                            </div>
+                            <div>
+                                <p class="text-gray-400 mb-1">Blue EPA: <span id="builder-blue-epa" class="text-white font-bold">--</span></p>
+                                <p class="text-gray-400">Blue Score: <span id="builder-blue-score" class="text-white font-bold">--</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
     </div>
 
     <!-- Bottom Navigation Bar -->
@@ -511,6 +666,14 @@
             <button id="nav-myteam" class="nav-btn flex flex-1 flex-col items-center justify-center gap-1 text-gray-500 hover:text-primary transition-colors" data-view="myteam">
                 <span class="material-symbols-outlined !text-2xl">target</span>
                 <span class="text-[10px] font-bold uppercase tracking-tighter">My Team</span>
+            </button>
+            <button id="nav-schedule" class="nav-btn flex flex-1 flex-col items-center justify-center gap-1 text-gray-500 hover:text-primary transition-colors" data-view="schedule">
+                <span class="material-symbols-outlined !text-2xl">calendar_month</span>
+                <span class="text-[10px] font-bold uppercase tracking-tighter">Schedule</span>
+            </button>
+            <button id="nav-builder" class="nav-btn flex flex-1 flex-col items-center justify-center gap-1 text-gray-500 hover:text-primary transition-colors" data-view="builder">
+                <span class="material-symbols-outlined !text-2xl">groups</span>
+                <span class="text-[10px] font-bold uppercase tracking-tighter">Builder</span>
             </button>
         </div>
         <div class="h-4"></div>
