@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TBA API Test</title>
+    <script>
+        async function testAPI() {
+            const apiKey = 'tVJ1vLvmnprQuKgnwjUk7bDl8zSiqhLRfQ5vK0MEx7d1ZefXLIVC8RSbVv43RO2B';
+            const endpoint = 'https://www.thebluealliance.com/api/v3/status';
+            
+            console.log('Testing API key...');
+            console.log('Endpoint:', endpoint);
+            console.log('API Key (first 10):', apiKey.substring(0, 10));
+            
+            try {
+                const response = await fetch(endpoint, {
+                    headers: {
+                        'X-TBA-Auth-Key': apiKey
+                    }
+                });
+                
+                console.log('Response status:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Success! Data:', data);
+                    document.getElementById('result').innerHTML = `
+                        <div style="color: green; padding: 20px; border: 2px solid green; border-radius: 8px; margin: 20px;">
+                            <h2>✓ API Key Works!</h2>
+                            <p>Status: ${response.status}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    document.getElementById('result').innerHTML = `
+                        <div style="color: red; padding: 20px; border: 2px solid red; border-radius: 8px; margin: 20px;">
+                            <h2>✗ API Key Failed</h2>
+                            <p>Status: ${response.status}</p>
+                            <p>Error: ${errorText}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                document.getElementById('result').innerHTML = `
+                    <div style="color: red; padding: 20px; border: 2px solid red; border-radius: 8px; margin: 20px;">
+                        <h2>✗ Request Failed</h2>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px;">
+    <h1>TBA API Key Test</h1>
+    <p>This page tests if your API key works with JavaScript fetch (same as PyScript uses)</p>
+    <button onclick="testAPI()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Test API Key</button>
+    <div id="result"></div>
+</body>
+</html>

@@ -15,3 +15,9 @@ python3 main.py --team 199 --year 2024
 
 If every API call succeeds, `scouting-data.json` will contain the latest data bundle.
 If some endpoints fail, the script still writes the file and stores error messages under `errors`.
+Just a way for me to show of my personal projects that I have done over the years. This was made using the help of AI
+
+Tools and sources used: 
+1. Claude ( FOR WEBSITE DEV )
+2. VSCode
+
