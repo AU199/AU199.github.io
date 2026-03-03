@@ -1,5 +1,5 @@
 {
-  "packages": ["pyodide-http"],
+  "packages": ["pyodide-http","statbotics"],
   "fetch": [
     {
       "from": "./main.py"

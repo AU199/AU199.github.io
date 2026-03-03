@@ -107,16 +107,45 @@ class TBAClient:
 
 
 class StatboticsClient:
-    """Client for Statbotics REST API v3"""
+    """
+    Client for Statbotics REST API v3.
+    
+    Correct v3 base URL: https://api.statbotics.io/v3
+    
+    Key endpoints (all use query parameters, NOT path segments):
+      GET /team_events?event={event_key}          -> list of team-event records
+      GET /team_events?team={team}&event={event}  -> single team at event
+      GET /team_matches?team={team}&event={event} -> match history for a team at event
+      GET /matches?event={event_key}              -> all matches at event
+    
+    Key EPA fields in v3 response (post-2025 breaking changes):
+      team_event record:
+        team          -> int team number
+        epa_start     -> float, EPA at event start
+        epa_pre_elims -> float, EPA before eliminations
+        epa_end       -> float, EPA at event end  (use this as "current event EPA")
+        epa_mean      -> float, mean EPA across event
+        norm_epa      -> float, normalized/unitless EPA (replaces norm_epa_end)
+    """
     
     BASE_URL = "https://api.statbotics.io/v3"
     
     async def make_request(self, endpoint):
+        """
+        Make a GET request to the Statbotics v3 API.
+        endpoint should include query string, e.g. 'team_events?event=2024cmptx'
+        """
         url = f"{self.BASE_URL}/{endpoint}"
         try:
             console.log(f"[Statbotics] GET {url}")
-            response = await fetch(url)
-            
+
+            options = Object.fromEntries(to_js([
+                ["method", "GET"],
+            ]))
+
+            response = await fetch(url, options)
+            console.log(f"[Statbotics] Response status: {response.status}")
+
             if response.status == 200:
                 data = await response.json()
                 return data.to_py()
@@ -128,43 +157,83 @@ class StatboticsClient:
             console.error(f"[Statbotics] request failed: {e}")
             return None
 
-    # ---------- EVENT ----------
+    # ---------- EVENT TEAMS ----------
     async def get_event_teams(self, event_key):
         """
-        Returns list of teams at event with EPA fields
-        REST: /event_teams/{event}
+        Returns list of team-event records for all teams at an event.
+        Correct v3 endpoint: GET /team_events?event={event_key}
+        Each record contains: team, epa_start, epa_pre_elims, epa_end, epa_mean, norm_epa, etc.
         """
-        return await self.make_request(f"event_teams/{event_key}")
+        return await self.make_request(f"team_events?event={event_key}&limit=500")
 
-    async def get_event_matches(self, event_key):
-        """
-        All matches with predictions
-        REST: /event_matches/{event}
-        """
-        return await self.make_request(f"event_matches/{event_key}")
-
-    # ---------- TEAM ----------
+    # ---------- SINGLE TEAM AT EVENT ----------
     async def get_team_event(self, team, event_key):
         """
-        EPA for one team at event
-        REST: /team_event/{team}/{event}
+        Returns EPA record for one team at a specific event.
+        Correct v3 endpoint: GET /team_events?team={team}&event={event_key}
+        Returns a list (usually one item).
         """
-        return await self.make_request(f"team_event/{team}/{event_key}")
+        result = await self.make_request(f"team_events?team={team}&event={event_key}")
+        if result and len(result) > 0:
+            return result[0]
+        return None
 
+    # ---------- TEAM MATCHES ----------
     async def get_team_matches(self, team, event_key):
         """
-        Team match history at event
-        REST: /team_matches/{team}/{event}
+        Returns match history for a team at an event.
+        Correct v3 endpoint: GET /team_matches?team={team}&event={event_key}
         """
-        return await self.make_request(f"team_matches/{team}/{event_key}")
+        return await self.make_request(f"team_matches?team={team}&event={event_key}&limit=200")
 
-    # ---------- MATCH ----------
+    # ---------- EVENT MATCHES ----------
+    async def get_event_matches(self, event_key):
+        """
+        Returns all matches at an event with predictions.
+        Correct v3 endpoint: GET /matches?event={event_key}
+        """
+        return await self.make_request(f"matches?event={event_key}&limit=500")
+
+    # ---------- SINGLE MATCH ----------
     async def get_match(self, match_key):
         """
-        Match prediction
-        REST: /match/{match}
+        Returns a single match with prediction data.
+        Correct v3 endpoint: GET /match/{match_key}
         """
         return await self.make_request(f"match/{match_key}")
+
+
+def get_epa_from_record(team_record):
+    """
+    Safely extract EPA value from a Statbotics v3 team_event record.
+    Tries epa_end first (current event EPA), falls back to epa_mean, then norm_epa.
+    Returns a float or 0.
+    """
+    if not team_record:
+        return 0
+    # epa_end = EPA at end of event (best indicator of current performance)
+    val = team_record.get('epa').get('total_points').get("mean")
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0
+
+
+def get_norm_epa_from_record(team_record):
+    """
+    Safely extract normalized/unitless EPA from a Statbotics v3 team_event record.
+    In v3 the field is 'norm_epa' (previously 'norm_epa_end').
+    Returns a float or 0.
+    """
+    if not team_record:
+        print("no team record")
+        return 0
+    val = team_record.get('epa').get('unitless')
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0
+
 
 class Dashboard:
     """Main dashboard controller"""
@@ -179,10 +248,10 @@ class Dashboard:
         self.rankings_data = None
         self.oprs_data = None
 
-        # Statbotics
-        self.epa_data = None          # event teams EPA
-        self.my_team_epa = None       # single team EPA
-        self.my_team_matches = None   # matches for my team
+        # Statbotics — list of team_event records for the whole event
+        self.epa_data = None
+        # Lookup dict: team_number_str -> team_event record (built from epa_data)
+        self.epa_lookup = {}
 
         self.current_filter = "all"
         self.epa_type = "normal"
@@ -307,7 +376,6 @@ class Dashboard:
         elif view_name == 'schedule':
             asyncio.create_task(self.load_schedule_view())
         elif view_name == 'builder':
-            # Load EPA data for builder if not loaded
             if not self.epa_data:
                 asyncio.create_task(self.load_epa_data())
     
@@ -439,6 +507,10 @@ class Dashboard:
         
         self.client.save_settings(api_key, event_key, team_number)
         
+        # Reset cached EPA data so it reloads for new event
+        self.epa_data = None
+        self.epa_lookup = {}
+        
         modal = document.getElementById('settings-modal')
         modal.classList.add('hidden')
         modal.style.display = 'none'
@@ -473,13 +545,15 @@ class Dashboard:
             overlay.style.display = 'none'
     
     async def load_all_data(self):
-        """Load all data from TBA"""
+        """Load all data from TBA and Statbotics"""
         self.show_loading("Loading event data...")
         
         try:
             await self.load_event_info()
             await self.load_matches()
             await self.load_rankings()
+            # Pre-load EPA data in background so it's ready for other views
+            await self.load_epa_data()
             
             self.hide_loading()
             
@@ -678,7 +752,7 @@ class Dashboard:
         # Update team number display
         document.getElementById('display-team-number').textContent = self.client.team_number
         
-        # Load team status
+        # Load team status from TBA
         status = await self.client.get_team_status(team_key)
         
         if status:
@@ -695,7 +769,7 @@ class Dashboard:
             
             document.getElementById('my-team-record').textContent = f"{wins}-{losses}-{ties}"
         
-        # Calculate average score
+        # Calculate average score from TBA match data
         if not self.matches_data:
             self.matches_data = await self.client.get_event_matches()
         
@@ -717,17 +791,17 @@ class Dashboard:
                 avg = sum(team_scores) / len(team_scores)
                 document.getElementById('my-team-avg').textContent = f"{avg:.1f}"
         
-        # Get EPA from Statbotics
+        # Get EPA from Statbotics using correct v3 endpoint
         if not self.epa_data:
             await self.load_epa_data()
         
-        if self.epa_data:
-            team_num_str = self.client.team_number
-            for team_data in self.epa_data:
-                if str(team_data.get('team', '')) == team_num_str:
-                    epa = team_data.get('epa_end', 0)
-                    document.getElementById('my-team-epa').textContent = f"{epa:.1f}"
-                    break
+        team_num_str = self.client.team_number
+        if team_num_str in self.epa_lookup:
+            team_record = self.epa_lookup[team_num_str]
+            epa = get_epa_from_record(team_record)
+            document.getElementById('my-team-epa').textContent = f"{epa:.1f}"
+        else:
+            document.getElementById('my-team-epa').textContent = "N/A"
         
         # Load next and previous matches
         await self.load_my_team_matches(team_key)
@@ -768,7 +842,7 @@ class Dashboard:
         self.render_previous_match(prev_match, team_key)
         
         # Calculate and render win probability
-        self.calculate_win_probability(next_match, team_key)
+        await self.calculate_win_probability(next_match, team_key)
     
     def render_next_match(self, match, team_key):
         """Render next match card"""
@@ -881,14 +955,13 @@ class Dashboard:
         container.innerHTML = html
     
     async def calculate_win_probability(self, match, team_key):
-        """Calculate and display win probability for next match using Statbotics EPA"""
+        """Calculate win probability for next match using Statbotics EPA"""
         container = document.getElementById('win-probability-content')
         
         if not match:
             container.innerHTML = '<div class="text-center text-gray-400 py-4"><p class="text-sm">No upcoming match to analyze</p></div>'
             return
         
-        # Load EPA data if not available
         if not self.epa_data:
             await self.load_epa_data()
         
@@ -900,27 +973,26 @@ class Dashboard:
         red_teams = alliances.get('red', {}).get('team_keys', [])
         blue_teams = alliances.get('blue', {}).get('team_keys', [])
         
-        # Calculate alliance EPAs
+        # Calculate alliance EPAs using the lookup dict
         red_epa = 0
         blue_epa = 0
         
-        for team_data in self.epa_data:
-            team_num = team_data.get('team', '')
-            team_frc_key = f"frc{team_num}"
-            # Use epa_end for current EPA at event
-            epa = team_data.get('epa_end', 0)
-            
-            if team_frc_key in red_teams:
-                red_epa += epa
-            elif team_frc_key in blue_teams:
-                blue_epa += epa
+        for frc_key in red_teams:
+            t_num = frc_key.replace('frc', '')
+            record = self.epa_lookup.get(t_num)
+            red_epa += get_epa_from_record(record)
+        
+        for frc_key in blue_teams:
+            t_num = frc_key.replace('frc', '')
+            record = self.epa_lookup.get(t_num)
+            blue_epa += get_epa_from_record(record)
         
         # Determine our alliance
         our_color = 'red' if team_key in red_teams else 'blue'
         our_epa = red_epa if our_color == 'red' else blue_epa
         opp_epa = blue_epa if our_color == 'red' else red_epa
         
-        # Calculate win probability using EPA
+        # Calculate win probability
         if our_epa + opp_epa > 0:
             win_prob = our_epa / (our_epa + opp_epa) * 100
         else:
@@ -929,7 +1001,6 @@ class Dashboard:
         # Clamp between 20-80% for realism
         win_prob = max(20, min(80, win_prob))
         
-        # Determine color and message
         if win_prob >= 60:
             prob_class = 'text-primary'
             message = 'Strong advantage'
@@ -975,47 +1046,59 @@ class Dashboard:
         if not self.matches_data:
             self.matches_data = await self.client.get_event_matches()
         
-        # Load EPA data if not already loaded
         if not self.epa_data and self.client.event_key:
             await self.load_epa_data()
         
         self.render_schedule(self.current_filter)
     
     async def load_epa_data(self):
-            """Load Statbotics EPA for entire event (cached)"""
-            if self.epa_data:
-                return self.epa_data
-
-            event_key = self.client.event_key
-            if not event_key:
-                return None
-
-            console.log(f"[Dashboard] Loading EPA for {event_key}")
-            self.epa_data = await self.statbotics.get_event_teams(event_key)
-
-            if not self.epa_data:
-                console.error("[Dashboard] EPA load failed")
-                self.epa_data = []
-
+        """
+        Load Statbotics EPA for entire event (cached).
+        Uses correct v3 endpoint: GET /team_events?event={event_key}
+        Builds a lookup dict keyed by team number string for fast access.
+        """
+        if self.epa_data is not None:
             return self.epa_data
+
+        event_key = self.client.event_key
+        if not event_key:
+            return None
+
+        console.log(f"[Dashboard] Loading EPA for event: {event_key}")
+        # Correct v3 endpoint: /team_events?event=EVENT_KEY
+        result = await self.statbotics.get_event_teams(event_key)
+
+        if not result:
+            console.error("[Dashboard] EPA load failed or returned empty — Statbotics may not have data for this event yet")
+            self.epa_data = []
+            self.epa_lookup = {}
+            return self.epa_data
+
+        self.epa_data = result
+        
+        # Build lookup dict: team_number_str -> record
+        self.epa_lookup = {}
+        for record in self.epa_data:
+            team_num = record.get('team')
+            if team_num is not None:
+                self.epa_lookup[str(team_num)] = record
+        
+        console.log(f"[Dashboard] Loaded EPA for {len(self.epa_data)} teams")
+        return self.epa_data
+
     async def load_my_team_data(self):
-        """Load Statbotics data for my team"""
-        team_num = int(self.client.team_number)
+        """Load Statbotics data for my team specifically"""
+        team_num = self.client.team_number
         event_key = self.client.event_key
 
         if not team_num or not event_key:
             return
 
-        console.log(f"[Dashboard] Loading my team {team_num}")
-
-        self.my_team_epa = await self.statbotics.get_team_event(
-            team_num, event_key
-        )
-
-        self.my_team_matches = await self.statbotics.get_team_matches(
-            team_num, event_key
-        )
-        
+        console.log(f"[Dashboard] Loading my team {team_num} from Statbotics")
+        # Correct v3 endpoint: /team_events?team=NUM&event=EVENT_KEY
+        team_record = await self.statbotics.get_team_event(int(team_num), event_key)
+        if team_record:
+            self.epa_lookup[str(team_num)] = team_record
         
     def filter_schedule(self, event):
         """Filter schedule view"""
@@ -1032,7 +1115,6 @@ class Dashboard:
         btn.classList.remove('bg-white/5', 'text-white')
         btn.classList.add('bg-primary', 'text-background-dark')
         
-        # Re-render schedule
         self.render_schedule(filter_type)
     
     def render_schedule(self, filter_type):
@@ -1092,7 +1174,6 @@ class Dashboard:
         red_nums = ', '.join([t.replace('frc', '') for t in red_teams])
         blue_nums = ', '.join([t.replace('frc', '') for t in blue_teams])
         
-        # Check if completed
         is_completed = match.get('actual_time') is not None
         
         if is_completed:
@@ -1172,7 +1253,6 @@ class Dashboard:
         if analysis_view:
             analysis_view.classList.add('active')
         
-        # Render match analysis
         await self.render_match_analysis(match)
     
     async def render_match_analysis(self, match):
@@ -1188,35 +1268,34 @@ class Dashboard:
         red_teams = alliances.get('red', {}).get('team_keys', [])
         blue_teams = alliances.get('blue', {}).get('team_keys', [])
         
-        # Calculate EPA totals
         red_epa_total = 0
         blue_epa_total = 0
-        red_unitless_total = 0
-        blue_unitless_total = 0
+        red_norm_total = 0
+        blue_norm_total = 0
         
-        # Get EPA for each team
         red_team_epas = []
         blue_team_epas = []
         
-        if self.epa_data:
-            for team_data in self.epa_data:
-                team_num = team_data.get('team', '')
-                team_key = f"frc{team_num}"
-                # Use epa_end for current EPA at this event
-                epa = team_data.get('epa_end', 0)
-                # Use norm_epa_end for normalized/unitless EPA
-                unitless = team_data.get('norm_epa_end', 0)
-                
-                if team_key in red_teams:
-                    red_epa_total += epa
-                    red_unitless_total += unitless
-                    red_team_epas.append((team_key, epa, unitless))
-                elif team_key in blue_teams:
-                    blue_epa_total += epa
-                    blue_unitless_total += unitless
-                    blue_team_epas.append((team_key, epa, unitless))
+        # Use the lookup dict for fast EPA access
+        for frc_key in red_teams:
+            t_num = frc_key.replace('frc', '')
+            record = self.epa_lookup.get(t_num)
+            epa = get_epa_from_record(record)
+            norm = get_norm_epa_from_record(record)
+            red_epa_total += epa
+            red_norm_total += norm
+            red_team_epas.append((frc_key, epa, norm))
         
-        # Calculate win probability using EPA
+        for frc_key in blue_teams:
+            t_num = frc_key.replace('frc', '')
+            record = self.epa_lookup.get(t_num)
+            epa = get_epa_from_record(record)
+            norm = get_norm_epa_from_record(record)
+            blue_epa_total += epa
+            blue_norm_total += norm
+            blue_team_epas.append((frc_key, epa, norm))
+        
+        # Calculate win probability
         if red_epa_total + blue_epa_total > 0:
             red_win_prob = red_epa_total / (red_epa_total + blue_epa_total) * 100
         else:
@@ -1224,37 +1303,39 @@ class Dashboard:
         
         blue_win_prob = 100 - red_win_prob
         
-        # Determine winner
         winner = 'RED' if red_win_prob > 50 else 'BLUE'
         winner_class = 'text-red-400' if winner == 'RED' else 'text-blue-400'
         
-        # Expected scores (EPA predicts point contribution)
         red_expected_score = red_epa_total if red_epa_total > 0 else 0
         blue_expected_score = blue_epa_total if blue_epa_total > 0 else 0
         
-        # Build team details HTML
+        # Build team detail HTML
         red_teams_html = ''
-        for team_key, epa, unitless in red_team_epas:
+        for team_key, epa, norm in red_team_epas:
             team_num = team_key.replace('frc', '')
+            epa_str = f"{epa:.1f}" if epa else "N/A"
+            norm_str = f"{norm:.1f}" if norm else "N/A"
             red_teams_html += f'''
             <div class="flex justify-between items-center p-2 bg-black/20 rounded">
                 <span class="text-white font-bold">{team_num}</span>
                 <div class="text-right">
-                    <p class="text-xs text-gray-400">EPA: <span class="text-white">{epa:.1f}</span></p>
-                    <p class="text-[10px] text-gray-500">Norm: {unitless:.1f}</p>
+                    <p class="text-xs text-gray-400">EPA: <span class="text-white">{epa_str}</span></p>
+                    <p class="text-[10px] text-gray-500">Norm: {norm_str}</p>
                 </div>
             </div>
             '''
         
         blue_teams_html = ''
-        for team_key, epa, unitless in blue_team_epas:
+        for team_key, epa, norm in blue_team_epas:
             team_num = team_key.replace('frc', '')
+            epa_str = f"{epa:.1f}" if epa else "N/A"
+            norm_str = f"{norm:.1f}" if norm else "N/A"
             blue_teams_html += f'''
             <div class="flex justify-between items-center p-2 bg-black/20 rounded">
                 <span class="text-white font-bold">{team_num}</span>
                 <div class="text-right">
-                    <p class="text-xs text-gray-400">EPA: <span class="text-white">{epa:.1f}</span></p>
-                    <p class="text-[10px] text-gray-500">Norm: {unitless:.1f}</p>
+                    <p class="text-xs text-gray-400">EPA: <span class="text-white">{epa_str}</span></p>
+                    <p class="text-[10px] text-gray-500">Norm: {norm_str}</p>
                 </div>
             </div>
             '''
@@ -1332,7 +1413,7 @@ class Dashboard:
                 <span class="text-primary font-bold">EPA (Expected Points Added)</span> measures how many points a team is expected to contribute to their alliance's score.
             </p>
             <p class="text-xs text-gray-400">
-                <span class="text-primary font-bold">Normalized EPA</span> is adjusted for seasonal strength, making it comparable across different years.
+                <span class="text-primary font-bold">Normalized EPA</span> is adjusted for seasonal strength, making it comparable across different years and events.
             </p>
         </section>
         '''
@@ -1356,7 +1437,6 @@ class Dashboard:
     
     async def calculate_custom_matchup(self, event):
         """Calculate win probability for custom alliance matchup"""
-        # Get team numbers
         red_teams = [
             document.getElementById('red-team-1').value.strip(),
             document.getElementById('red-team-2').value.strip(),
@@ -1369,39 +1449,33 @@ class Dashboard:
             document.getElementById('blue-team-3').value.strip()
         ]
         
-        # Validate input
         red_teams = [t for t in red_teams if t]
         blue_teams = [t for t in blue_teams if t]
         
         if len(red_teams) == 0 or len(blue_teams) == 0:
             return
         
-        # Load EPA data if needed
         if not self.epa_data:
             await self.load_epa_data()
         
         if not self.epa_data:
             return
         
-        # Calculate EPA totals
+        # Calculate EPA totals using lookup dict
         red_epa = 0
         blue_epa = 0
         red_norm_epa = 0
         blue_norm_epa = 0
         
-        for team_data in self.epa_data:
-            team_num = str(team_data.get('team', ''))
-            # Use epa_end for current EPA
-            epa = team_data.get('epa_end', 0)
-            # Use norm_epa_end for normalized EPA
-            norm_epa = team_data.get('norm_epa_end', 0)
-            
-            if team_num in red_teams:
-                red_epa += epa
-                red_norm_epa += norm_epa
-            elif team_num in blue_teams:
-                blue_epa += epa
-                blue_norm_epa += norm_epa
+        for team_num in red_teams:
+            record = self.epa_lookup.get(team_num)
+            red_epa += get_epa_from_record(record)
+            red_norm_epa += get_norm_epa_from_record(record)
+        
+        for team_num in blue_teams:
+            record = self.epa_lookup.get(team_num)
+            blue_epa += get_epa_from_record(record)
+            blue_norm_epa += get_norm_epa_from_record(record)
         
         # Use selected EPA type
         if self.epa_type == 'unitless':
@@ -1419,7 +1493,6 @@ class Dashboard:
         
         blue_win_prob = 100 - red_win_prob
         
-        # Determine winner
         winner = 'RED' if red_win_prob > 50 else 'BLUE'
         winner_class = 'text-red-400' if winner == 'RED' else 'text-blue-400'
         
@@ -1433,8 +1506,11 @@ class Dashboard:
         document.getElementById('red-win-prob').textContent = f'{red_win_prob:.1f}%'
         document.getElementById('blue-win-prob').textContent = f'{blue_win_prob:.1f}%'
         
-        document.getElementById('builder-red-epa').textContent = f'{red_epa:.1f}' if self.epa_type == 'normal' else f'{red_norm_epa:.1f}'
-        document.getElementById('builder-blue-epa').textContent = f'{blue_epa:.1f}' if self.epa_type == 'normal' else f'{blue_norm_epa:.1f}'
+        display_red = red_norm_epa if self.epa_type == 'unitless' else red_epa
+        display_blue = blue_norm_epa if self.epa_type == 'unitless' else blue_epa
+        
+        document.getElementById('builder-red-epa').textContent = f'{display_red:.1f}'
+        document.getElementById('builder-blue-epa').textContent = f'{display_blue:.1f}'
         
         document.getElementById('builder-red-score').textContent = f'{red_epa:.0f}' if red_epa > 0 else '--'
         document.getElementById('builder-blue-score').textContent = f'{blue_epa:.0f}' if blue_epa > 0 else '--'
@@ -1447,8 +1523,8 @@ class Dashboard:
         document.getElementById('red-alliance-stats').classList.remove('hidden')
         document.getElementById('blue-alliance-stats').classList.remove('hidden')
         
-        document.getElementById('red-total-epa').textContent = f'{red_epa:.1f}' if self.epa_type == 'normal' else f'{red_norm_epa:.1f}'
-        document.getElementById('blue-total-epa').textContent = f'{blue_epa:.1f}' if self.epa_type == 'normal' else f'{blue_norm_epa:.1f}'
+        document.getElementById('red-total-epa').textContent = f'{display_red:.1f}'
+        document.getElementById('blue-total-epa').textContent = f'{display_blue:.1f}'
 
 
 # Initialize dashboard when page loads
