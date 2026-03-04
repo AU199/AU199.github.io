@@ -1,6 +1,6 @@
-# FRC Scouting Dashboard
+# Busters Den
 
-A mobile-friendly web app for scouting FRC (FIRST Robotics Competition) events in real time. Built with PyScript, it runs entirely in the browser — no server needed.
+Hello, this is a scouting app I create for my FRC (FIRST Robotics Competition) team, 9097 machbusters. It can be used by anyone. I create this because I wanted a place that is consise while also using all the stuff from both blue alliance and statobotics in order to make better judgments, and also just to show about. That is all I have to say, now read the AI slop that explains this code (Which is also somewhat of AI slop :>)
 
 ---
 

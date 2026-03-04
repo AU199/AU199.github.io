@@ -1228,7 +1228,10 @@ class Dashboard:
     
     async def view_match_analysis(self, event):
         """View detailed match analysis"""
-        card = event.currentTarget
+        card = event.target.closest('.match-card')
+        if not card:
+            return
+        
         match_key = card.getAttribute('data-match-key')
         
         if not match_key:
