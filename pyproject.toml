@@ -1,0 +1,11 @@
+[project]
+name = "au199-github-io"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "javascript>=1!1.2.6",
+    "js>=1.0",
+    "pyodide-http>=0.2.2",
+    "pyodide-py>=0.29.3",
+]

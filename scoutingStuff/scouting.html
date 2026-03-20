@@ -293,6 +293,17 @@
                         class="w-full bg-white/5 border border-primary/20 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-primary"
                     />
                 </div>
+
+                <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <div>
+                        <p class="text-sm text-white font-bold">Auto-Refresh</p>
+                        <p class="text-xs text-gray-400">Update data every 60 seconds</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="auto-refresh-toggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                </div>
                 
                 <button id="save-settings" class="w-full bg-primary text-background-dark font-bold py-3 rounded-lg hover:bg-primary/90 transition-colors">
                     Save Settings
@@ -433,7 +444,8 @@
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <h2 class="text-white text-2xl font-bold">Team <span id="display-team-number">--</span></h2>
-                                <p class="text-gray-400 text-sm">Current Statistics</p>
+                                <p id="display-team-name" class="text-primary/70 text-sm font-medium"></p>
+                                <p class="text-gray-400 text-xs">Current Statistics</p>
                             </div>
                             <div class="text-primary flex size-14 items-center justify-center bg-primary/10 rounded-xl">
                                 <span class="material-symbols-outlined !text-4xl">emoji_events</span>
@@ -505,7 +517,7 @@
 
                 <!-- Filter Options -->
                 <section class="glass-card rounded-xl p-4">
-                    <div class="flex gap-2 overflow-x-auto">
+                    <div class="flex gap-2 overflow-x-auto mb-3">
                         <button class="schedule-filter-btn px-4 py-2 rounded-lg text-xs font-bold bg-primary text-background-dark" data-filter="all">
                             All Matches
                         </button>
@@ -518,6 +530,15 @@
                         <button id="myteam-filter-btn" class="schedule-filter-btn px-4 py-2 rounded-lg text-xs font-bold bg-white/5 text-white" data-filter="myteam">
                             My Team
                         </button>
+                    </div>
+                    <div class="relative">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 !text-base pointer-events-none">search</span>
+                        <input
+                            type="text"
+                            id="schedule-search"
+                            placeholder="Search by team number or name…"
+                            class="w-full bg-white/5 border border-primary/10 rounded-lg pl-9 pr-4 py-2 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-primary/40"
+                        />
                     </div>
                 </section>
 
@@ -544,6 +565,24 @@
 
                 <div id="match-analysis-content">
                     <!-- Content loaded dynamically -->
+                </div>
+            </main>
+        </div>
+
+        <!-- Team Overview View -->
+        <div id="view-team" class="view-container">
+            <main class="p-4 max-w-2xl mx-auto w-full space-y-6">
+                <section class="pt-2 flex items-center gap-3">
+                    <button id="back-from-team" class="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors shrink-0">
+                        <span class="material-symbols-outlined">arrow_back</span>
+                    </button>
+                    <div>
+                        <h1 class="text-white text-3xl font-bold leading-tight">Team <span id="team-overview-number">--</span></h1>
+                        <p id="team-overview-name" class="text-primary/70 text-sm font-medium"></p>
+                    </div>
+                </section>
+                <div id="team-overview-content" class="space-y-4">
+                    <!-- Populated dynamically -->
                 </div>
             </main>
         </div>
@@ -650,6 +689,37 @@
             </main>
         </div>
 
+    </div>
+
+    <!-- Scouting Notes Modal -->
+    <div id="notes-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[110] items-center justify-center p-4" style="display: none;">
+        <div class="bg-background-dark border-2 border-yellow-400/30 rounded-xl p-6 max-w-md w-full">
+            <div class="flex items-center justify-between mb-1">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-yellow-400">edit_note</span>
+                    <h2 id="notes-modal-title" class="text-white text-lg font-bold">Scouting Notes</h2>
+                </div>
+                <button id="close-notes-modal" class="text-gray-400 hover:text-white">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <p id="notes-modal-subtitle" class="text-gray-500 text-xs mb-4"></p>
+            <input type="hidden" id="notes-key" value="">
+            <textarea
+                id="notes-textarea"
+                rows="6"
+                placeholder="e.g. Strong autonomous, inconsistent teleop, good defense..."
+                class="w-full bg-white/5 border border-yellow-400/20 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-yellow-400 text-sm resize-none mb-4"
+            ></textarea>
+            <div class="flex gap-3">
+                <button id="cancel-notes-btn" class="flex-1 bg-white/5 text-white font-bold py-3 rounded-lg hover:bg-white/10 transition-colors text-sm">
+                    Cancel
+                </button>
+                <button id="save-notes-btn" class="flex-[2] bg-yellow-400 text-black font-bold py-3 rounded-lg hover:bg-yellow-300 transition-colors text-sm">
+                    Save Notes
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Bottom Navigation Bar -->

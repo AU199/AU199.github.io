@@ -105,6 +105,12 @@ class TBAClient:
             return None
         return await self.make_request(f"event/{self.event_key}/oprs")
 
+    async def get_event_teams_simple(self):
+        """Get simple team list with nicknames"""
+        if not self.event_key:
+            return None
+        return await self.make_request(f"event/{self.event_key}/teams/simple")
+
 
 class StatboticsClient:
     """
@@ -182,9 +188,21 @@ class StatboticsClient:
     async def get_team_matches(self, team, event_key):
         """
         Returns match history for a team at an event.
+        Each record contains epa_start, epa_end, and match info.
         Correct v3 endpoint: GET /team_matches?team={team}&event={event_key}
         """
         return await self.make_request(f"team_matches?team={team}&event={event_key}&limit=200")
+
+    # ---------- TEAM EVENT HISTORY ----------
+    async def get_team_event_history(self, team, year=None):
+        """
+        Returns all team_event records for a team across all events (or a specific year).
+        Used to plot EPA across tournaments.
+        Correct v3 endpoint: GET /team_events?team={team}&year={year}
+        """
+        if year:
+            return await self.make_request(f"team_events?team={team}&year={year}&limit=50")
+        return await self.make_request(f"team_events?team={team}&limit=100")
 
     # ---------- EVENT MATCHES ----------
     async def get_event_matches(self, event_key):
@@ -252,14 +270,163 @@ class Dashboard:
         self.epa_data = None
         # Lookup dict: team_number_str -> team_event record (built from epa_data)
         self.epa_lookup = {}
+        # Lookup dict: team_number_str -> team nickname (e.g. "Robonauts")
+        self.team_names = {}
+        # Lookup dict: team_number_str -> scouting notes (from localStorage)
+        self.scouting_notes = self.load_scouting_notes()
 
         self.current_filter = "all"
         self.epa_type = "normal"
+        self.schedule_search = ""        # current team search query on schedule page
+        self._refresh_interval = None
+        # Cache: team_num_str -> list of team_match records (per-match EPA)
+        self._team_match_epa_cache = {}
+        # Cache: team_num_str -> list of team_event records (cross-event EPA)
+        self._team_event_history_cache = {}
 
         self.setup_ui()
         self.check_initial_setup()
 
     
+    def load_scouting_notes(self):
+        """Load all scouting notes from localStorage"""
+        try:
+            raw = localStorage.getItem('scouting_notes')
+            if raw:
+                return json.loads(raw)
+        except:
+            pass
+        return {}
+
+    def _persist_notes(self):
+        try:
+            localStorage.setItem('scouting_notes', json.dumps(self.scouting_notes))
+        except:
+            pass
+
+    def save_scouting_note(self, key, note):
+        """Persist a note by any key (team number or match key)."""
+        if note.strip():
+            self.scouting_notes[key] = note.strip()
+        else:
+            self.scouting_notes.pop(key, None)
+        self._persist_notes()
+
+    def open_team_notes_modal(self, team_num):
+        """Open the notes modal pre-filled for a specific team."""
+        modal = document.getElementById('notes-modal')
+        if not modal:
+            return
+        team_num = str(team_num)
+        name = self.team_names.get(team_num, '')
+        label = f"{team_num}" + (f" – {name}" if name else "")
+        document.getElementById('notes-modal-title').textContent = f"Notes · Team {label}"
+        document.getElementById('notes-modal-subtitle').textContent = "Observations about this team's robot and strategy."
+        document.getElementById('notes-textarea').value = self.scouting_notes.get(team_num, '')
+        key_el = document.getElementById('notes-key')
+        key_el.value = team_num
+        key_el.setAttribute('value', team_num)
+        modal.style.display = 'flex'
+
+    def open_match_notes_modal(self, match_key, match_num):
+        """Open the notes modal pre-filled for a whole match."""
+        modal = document.getElementById('notes-modal')
+        if not modal:
+            return
+        match_key = str(match_key)
+        document.getElementById('notes-modal-title').textContent = f"Notes · Match Q{match_num}"
+        document.getElementById('notes-modal-subtitle').textContent = "Overall observations about this match."
+        document.getElementById('notes-textarea').value = self.scouting_notes.get(match_key, '')
+        key_el = document.getElementById('notes-key')
+        key_el.value = match_key
+        key_el.setAttribute('value', match_key)
+        modal.style.display = 'flex'
+
+    def close_notes_modal(self, event=None):
+        modal = document.getElementById('notes-modal')
+        if modal:
+            modal.style.display = 'none'
+
+    def save_notes_from_modal(self, event=None):
+        key_el = document.getElementById('notes-key')
+        text_el = document.getElementById('notes-textarea')
+        if not key_el or not text_el:
+            console.error('[Notes] Modal elements not found')
+            return
+        key = key_el.value or key_el.getAttribute('value') or ''
+        note = text_el.value or ''
+        if not key:
+            console.error('[Notes] No key set in modal')
+            self.close_notes_modal()
+            return
+        self.save_scouting_note(str(key), str(note))
+        self.close_notes_modal()
+        self._refresh_note_indicators()
+
+    def _refresh_note_indicators(self):
+        """Update yellow dot indicators on all visible notes buttons without re-rendering."""
+        for btn in document.querySelectorAll('.notes-btn[data-key]'):
+            key = btn.getAttribute('data-key')
+            dot = btn.querySelector('.note-dot')
+            if dot:
+                dot.style.display = 'inline-block' if self.scouting_notes.get(key, '').strip() else 'none'
+        for btn in document.querySelectorAll('.match-notes-btn[data-key]'):
+            key = btn.getAttribute('data-key')
+            dot = btn.querySelector('.note-dot')
+            if dot:
+                dot.style.display = 'inline-block' if self.scouting_notes.get(key, '').strip() else 'none'
+
+    async def load_team_names(self):
+        """Fetch team nicknames for every team at this event"""
+        teams = await self.client.get_event_teams_simple()
+        if not teams:
+            return
+        for t in teams:
+            key = t.get('key', '').replace('frc', '')
+            nickname = t.get('nickname', '')
+            if key and nickname:
+                self.team_names[key] = nickname
+
+    def get_team_label(self, team_num_str, bold=False, highlight_my_team=True):
+        """Return 'NNNN – Name' label, optionally bolding or highlighting my team."""
+        name = self.team_names.get(team_num_str, '')
+        is_mine = highlight_my_team and self.client.team_number and team_num_str == str(self.client.team_number)
+        num_part = f"<span class='{'text-primary font-black' if is_mine else ''}'>{team_num_str}</span>"
+        if name:
+            return f"{num_part} <span class='text-gray-400 text-xs'>– {name}</span>"
+        return num_part
+
+    def format_match_time(self, match):
+        """Return a human-readable scheduled time string for an upcoming match."""
+        from js import Date
+        ts = match.get('predicted_time') or match.get('time')
+        if not ts:
+            return None
+        try:
+            ms = int(ts) * 1000
+            d = Date.new(ms)
+            hours = d.getHours()
+            minutes = d.getMinutes()
+            ampm = 'AM' if hours < 12 else 'PM'
+            h12 = hours % 12 or 12
+            mins = str(minutes).zfill(2)
+            return f"{h12}:{mins} {ampm}"
+        except:
+            return None
+
+    def start_auto_refresh(self):
+        """Start 60-second auto-refresh using JS setInterval."""
+        from js import setInterval, clearInterval
+        import asyncio
+        if self._refresh_interval is not None:
+            clearInterval(self._refresh_interval)
+
+        def _tick(ev=None):
+            asyncio.create_task(self.load_all_data())
+
+        proxy = create_proxy(_tick)
+        self._refresh_interval = setInterval(proxy, 60000)
+
     def setup_ui(self):
         """Setup UI event handlers"""
         # Wizard navigation
@@ -326,7 +493,43 @@ class Dashboard:
         back_btn = document.getElementById('back-from-analysis')
         if back_btn:
             back_btn.addEventListener('click', create_proxy(lambda e: self.navigate_to('schedule')))
+
+        # Back from team overview button
+        back_team_btn = document.getElementById('back-from-team')
+        if back_team_btn:
+            back_team_btn.addEventListener('click', create_proxy(lambda e: self.navigate_to('leaderboard')))
+
+        # Schedule team search
+        search_input = document.getElementById('schedule-search')
+        if search_input:
+            search_input.addEventListener('input', create_proxy(self.on_schedule_search))
+
+        # Scouting notes modal
+        close_notes_btn = document.getElementById('close-notes-modal')
+        if close_notes_btn:
+            close_notes_btn.addEventListener('click', create_proxy(self.close_notes_modal))
+        cancel_notes_btn = document.getElementById('cancel-notes-btn')
+        if cancel_notes_btn:
+            cancel_notes_btn.addEventListener('click', create_proxy(self.close_notes_modal))
+        save_notes_btn = document.getElementById('save-notes-btn')
+        if save_notes_btn:
+            save_notes_btn.addEventListener('click', create_proxy(self.save_notes_from_modal))
+        # Auto-refresh toggle
+        refresh_toggle = document.getElementById('auto-refresh-toggle')
+        if refresh_toggle:
+            refresh_toggle.addEventListener('change', create_proxy(self.toggle_auto_refresh))
     
+    def toggle_auto_refresh(self, event):
+        """Enable or disable 60s auto-refresh"""
+        enabled = event.currentTarget.checked
+        if enabled:
+            self.start_auto_refresh()
+        else:
+            from js import clearInterval
+            if self._refresh_interval is not None:
+                clearInterval(self._refresh_interval)
+                self._refresh_interval = None
+
     def switch_view(self, event):
         """Switch between views"""
         target = event.currentTarget
@@ -378,6 +581,13 @@ class Dashboard:
         elif view_name == 'builder':
             if not self.epa_data:
                 asyncio.create_task(self.load_epa_data())
+
+        # Clear schedule search when leaving
+        if view_name != 'schedule':
+            self.schedule_search = ''
+            inp = document.getElementById('schedule-search')
+            if inp:
+                inp.value = ''
     
     def check_initial_setup(self):
         """Check if initial setup is needed"""
@@ -507,9 +717,10 @@ class Dashboard:
         
         self.client.save_settings(api_key, event_key, team_number)
         
-        # Reset cached EPA data so it reloads for new event
+        # Reset all cached event data so it reloads for new event
         self.epa_data = None
         self.epa_lookup = {}
+        self.team_names = {}
         
         modal = document.getElementById('settings-modal')
         modal.classList.add('hidden')
@@ -550,6 +761,7 @@ class Dashboard:
         
         try:
             await self.load_event_info()
+            await self.load_team_names()
             await self.load_matches()
             await self.load_rankings()
             # Pre-load EPA data in background so it's ready for other views
@@ -619,28 +831,38 @@ class Dashboard:
         html = ''
         for match in upcoming[:3]:
             match_num = match.get('match_number', '?')
+            match_key = match.get('key', '')
             
             red_teams = match.get('alliances', {}).get('red', {}).get('team_keys', [])
             blue_teams = match.get('alliances', {}).get('blue', {}).get('team_keys', [])
             
-            red_nums = ', '.join([t.replace('frc', '') for t in red_teams])
-            blue_nums = ', '.join([t.replace('frc', '') for t in blue_teams])
-            
+            time_str = self.format_match_time(match)
+            time_html = f'<p class="text-[10px] text-primary/70 mt-0.5">{time_str}</p>' if time_str else ''
+
+            def team_chip(frc_key):
+                num = frc_key.replace('frc', '')
+                is_mine = self.client.team_number and num == str(self.client.team_number)
+                cls = 'text-primary font-black' if is_mine else 'text-white'
+                return f"<span class='{cls}'>{num}</span>"
+
+            red_chips = ' '.join([team_chip(t) for t in red_teams])
+            blue_chips = ' '.join([team_chip(t) for t in blue_teams])
+
             html += f'''
-            <div class="flex items-center justify-between bg-black/40 p-3 rounded-lg">
-                <div class="text-center px-2">
+            <div class="upcoming-match-card cursor-pointer hover:bg-white/5 transition-colors bg-black/40 p-3 rounded-lg flex items-center justify-between" data-match-key="{match_key}">
+                <div class="text-center px-2 min-w-[40px]">
                     <p class="text-[10px] text-gray-400 uppercase">Match</p>
                     <p class="text-lg font-black text-white leading-none">Q{match_num}</p>
+                    {time_html}
                 </div>
-                <div class="flex-1 flex justify-around items-center px-4">
-                    <div class="flex flex-col items-center">
-                        <span class="text-[10px] font-bold text-blue-400 uppercase">Blue</span>
-                        <span class="text-sm font-bold text-white">{blue_nums}</span>
+                <div class="flex-1 flex flex-col gap-1 px-4">
+                    <div class="flex items-center gap-1">
+                        <span class="text-[10px] font-bold text-blue-400 uppercase w-8">Blue</span>
+                        <span class="text-xs">{blue_chips}</span>
                     </div>
-                    <span class="text-gray-500 font-bold">VS</span>
-                    <div class="flex flex-col items-center">
-                        <span class="text-[10px] font-bold text-red-400 uppercase">Red</span>
-                        <span class="text-sm font-bold text-white">{red_nums}</span>
+                    <div class="flex items-center gap-1">
+                        <span class="text-[10px] font-bold text-red-400 uppercase w-8">Red</span>
+                        <span class="text-xs">{red_chips}</span>
                     </div>
                 </div>
                 <div class="text-right">
@@ -650,6 +872,10 @@ class Dashboard:
             '''
         
         container.innerHTML = html
+
+        # Wire click → match analysis
+        for card in document.querySelectorAll('.upcoming-match-card'):
+            card.addEventListener('click', create_proxy(self.view_match_analysis))
     
     async def load_rankings(self):
         """Load and display team rankings"""
@@ -672,13 +898,66 @@ class Dashboard:
             html += self.render_team_card(team_data, oprs, i)
         
         container.innerHTML = html
+        self._wire_notes_buttons()
     
+    def _wire_notes_buttons(self):
+        """
+        Attach a single delegated click listener to each content container.
+        Uses a data-wired attribute flag so listeners are never stacked on re-renders.
+        """
+        containers = [
+            'full-leaderboard',
+            'leaderboard-preview',
+            'schedule-matches',
+            'match-analysis-content',
+            'team-overview-content',
+        ]
+        for cid in containers:
+            el = document.getElementById(cid)
+            if not el:
+                continue
+            # Skip if already wired — innerHTML replacement makes children fresh
+            # but the container element itself persists, so one listener is enough
+            if el.getAttribute('data-notes-wired') == '1':
+                continue
+            el.setAttribute('data-notes-wired', '1')
+
+            def make_delegate(cid=cid):
+                def delegate(ev):
+                    nb = ev.target.closest('.notes-btn[data-key]')
+                    if nb:
+                        ev.stopPropagation()
+                        self.open_team_notes_modal(nb.getAttribute('data-key'))
+                        return
+                    mb = ev.target.closest('.match-notes-btn[data-key]')
+                    if mb:
+                        ev.stopPropagation()
+                        self.open_match_notes_modal(
+                            mb.getAttribute('data-key'),
+                            mb.getAttribute('data-match-num')
+                        )
+                        return
+                    tc = ev.target.closest('.team-card[data-team]')
+                    if tc:
+                        import asyncio
+                        asyncio.create_task(self.open_team_overview(tc.getAttribute('data-team')))
+                        return
+                    mc = ev.target.closest('.match-card')
+                    if mc:
+                        import asyncio
+                        asyncio.create_task(self.view_match_analysis(ev))
+                        return
+                return delegate
+
+            el.addEventListener('click', create_proxy(make_delegate()))
+
     def render_team_card(self, team_data, oprs, index):
         """Render a single team card"""
         rank = team_data.get('rank', index + 1)
         team_key = team_data.get('team_key', '')
         team_num = team_key.replace('frc', '')
-        
+        team_name = self.team_names.get(team_num, '')
+
         opr = oprs.get(team_key, 0)
         opr_text = f"{opr:.1f} OPR" if opr else "N/A"
         
@@ -686,32 +965,43 @@ class Dashboard:
         wins = record.get('wins', 0)
         losses = record.get('losses', 0)
         ties = record.get('ties', 0)
-        
-        border_class = 'border-l-primary' if rank <= 3 else 'border-l-white/10'
+
+        is_mine = self.client.team_number and team_num == str(self.client.team_number)
+        border_class = 'border-l-primary' if rank <= 3 or is_mine else 'border-l-white/10'
         text_color = 'text-primary' if rank <= 3 else 'text-white'
-        
-        badge = '<span class="bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded font-bold uppercase">Pro</span>' if rank == 1 else ''
-        
+        num_color = 'text-primary' if is_mine else 'text-white'
+
+        badge = '<span class="bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded font-bold uppercase">Top</span>' if rank == 1 else ''
+        has_note = bool(self.scouting_notes.get(team_num, '').strip())
+        note_dot = f'<span class="note-dot size-1.5 rounded-full bg-yellow-400 inline-block mb-0.5" style="display:{"inline-block" if has_note else "none"}"></span>'
+
         return f'''
-        <div class="glass-card rounded-lg p-3 flex items-center justify-between border-l-4 {border_class}">
+        <div class="team-card glass-card rounded-lg p-3 flex items-center justify-between border-l-4 {border_class} cursor-pointer hover:border-primary/50 transition-colors" data-team="{team_num}">
             <div class="flex items-center gap-4">
                 <div class="text-2xl font-black text-white/20 italic">#{rank}</div>
                 <div>
                     <div class="flex items-center gap-2">
-                        <span class="text-lg font-bold text-white leading-none">{team_num}</span>
+                        <span class="text-lg font-bold {num_color} leading-none">{team_num}</span>
                         {badge}
                     </div>
-                    <p class="text-xs text-gray-400">{wins}-{losses}-{ties}</p>
+                    {f'<p class="text-xs text-gray-400 leading-none mb-0.5">{team_name}</p>' if team_name else ''}
+                    <p class="text-xs text-gray-500">{wins}-{losses}-{ties}</p>
                 </div>
             </div>
-            <div class="flex flex-col items-end">
-                <span class="text-xs font-bold {text_color}">{opr_text}</span>
-                <div class="flex gap-0.5 mt-1">
-                    <div class="h-4 w-1 bg-primary/60"></div>
-                    <div class="h-3 w-1 bg-primary/40"></div>
-                    <div class="h-5 w-1 bg-primary/80"></div>
-                    <div class="h-4 w-1 bg-primary/50"></div>
+            <div class="flex items-center gap-3">
+                <div class="flex flex-col items-end">
+                    <span class="text-xs font-bold {text_color}">{opr_text}</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <div class="h-4 w-1 bg-primary/60"></div>
+                        <div class="h-3 w-1 bg-primary/40"></div>
+                        <div class="h-5 w-1 bg-primary/80"></div>
+                        <div class="h-4 w-1 bg-primary/50"></div>
+                    </div>
                 </div>
+                <button class="notes-btn text-gray-500 hover:text-yellow-400 transition-colors p-1 flex flex-col items-center" data-key="{team_num}" title="Scouting notes">
+                    {note_dot}
+                    <span class="material-symbols-outlined !text-lg">edit_note</span>
+                </button>
             </div>
         </div>
         '''
@@ -734,6 +1024,7 @@ class Dashboard:
             html += self.render_team_card(team_data, oprs, i)
         
         container.innerHTML = html
+        self._wire_notes_buttons()
     
     async def load_my_team_view(self):
         """Load My Team view"""
@@ -745,12 +1036,18 @@ class Dashboard:
         
         document.getElementById('no-team-message').classList.add('hidden')
         document.getElementById('myteam-content').classList.remove('hidden')
-        document.getElementById('myteam-subtitle').textContent = f'Detailed analytics for Team {self.client.team_number}'
+        team_name = self.team_names.get(str(self.client.team_number), '')
+        subtitle = f'{team_name}' if team_name else f'Team {self.client.team_number}'
+        document.getElementById('myteam-subtitle').textContent = subtitle
         
         team_key = f"frc{self.client.team_number}"
         
         # Update team number display
         document.getElementById('display-team-number').textContent = self.client.team_number
+        # Show team name below number if available
+        name_el = document.getElementById('display-team-name')
+        if name_el:
+            name_el.textContent = team_name
         
         # Load team status from TBA
         status = await self.client.get_team_status(team_key)
@@ -845,7 +1142,7 @@ class Dashboard:
         await self.calculate_win_probability(next_match, team_key)
     
     def render_next_match(self, match, team_key):
-        """Render next match card"""
+        """Render next match card with team names and scheduled time"""
         container = document.getElementById('next-match-content')
         
         if not match:
@@ -858,34 +1155,49 @@ class Dashboard:
         red_teams = alliances.get('red', {}).get('team_keys', [])
         blue_teams = alliances.get('blue', {}).get('team_keys', [])
         
-        # Determine our alliance
         our_color = 'red' if team_key in red_teams else 'blue'
         our_alliance = red_teams if our_color == 'red' else blue_teams
-        opponent_alliance = blue_teams if our_color == 'red' else red_teams
-        
-        our_nums = ', '.join([f"<span class='font-bold'>{t.replace('frc', '')}</span>" if t == team_key else t.replace('frc', '') for t in our_alliance])
-        opp_nums = ', '.join([t.replace('frc', '') for t in opponent_alliance])
-        
+        opp_alliance = blue_teams if our_color == 'red' else red_teams
         our_color_class = 'text-red-400 border-red-400/30' if our_color == 'red' else 'text-blue-400 border-blue-400/30'
-        opp_color_class = 'text-blue-400' if our_color == 'red' else 'text-red-400'
-        
+        opp_color_cls = 'text-blue-400' if our_color == 'red' else 'text-red-400'
+
+        def team_line(frc_key, ours):
+            num = frc_key.replace('frc', '')
+            name = self.team_names.get(num, '')
+            is_me = frc_key == team_key
+            num_cls = 'font-black text-primary' if is_me else ('text-white font-bold' if ours else opp_color_cls)
+            mine = '<span class="text-[9px] bg-primary/20 text-primary px-1 rounded ml-1">YOU</span>' if is_me else ''
+            name_part = f' <span class="text-gray-500 text-[10px]">– {name}</span>' if name else ''
+            return f'<div class="text-sm leading-6"><span class="{num_cls}">{num}</span>{mine}{name_part}</div>'
+
+        our_lines = ''.join([team_line(t, True) for t in our_alliance])
+        opp_lines = ''.join([team_line(t, False) for t in opp_alliance])
+
+        time_str = self.format_match_time(match)
+        time_html = f'''
+        <div class="flex items-center justify-center gap-2 mb-4 bg-primary/10 rounded-lg py-2">
+            <span class="material-symbols-outlined text-primary !text-base">schedule</span>
+            <span class="text-primary font-bold text-sm">{time_str}</span>
+        </div>''' if time_str else ''
+
         html = f'''
         <div class="bg-black/40 rounded-lg p-4 border-2 {our_color_class}">
-            <div class="text-center mb-4">
+            <div class="text-center mb-3">
                 <p class="text-[10px] text-gray-400 uppercase">Qualification Match</p>
                 <p class="text-3xl font-black text-white">Q{match_num}</p>
             </div>
+            {time_html}
             <div class="space-y-3">
                 <div class="bg-primary/10 rounded p-3">
                     <p class="text-[10px] text-gray-400 uppercase mb-1">Your Alliance ({our_color.title()})</p>
-                    <p class="text-sm text-white">{our_nums}</p>
+                    {our_lines}
                 </div>
                 <div class="text-center">
                     <span class="text-gray-500 font-bold text-xs">VS</span>
                 </div>
                 <div class="bg-white/5 rounded p-3">
                     <p class="text-[10px] text-gray-400 uppercase mb-1">Opponents</p>
-                    <p class="text-sm {opp_color_class}">{opp_nums}</p>
+                    {opp_lines}
                 </div>
             </div>
         </div>
@@ -1117,15 +1429,176 @@ class Dashboard:
         
         self.render_schedule(filter_type)
     
+    def on_schedule_search(self, event):
+        """Filter schedule matches by team number or name in real time."""
+        self.schedule_search = event.target.value.strip().lower()
+        self.render_schedule(self.current_filter)
+
+    async def open_team_overview(self, team_num_str):
+        """Render and navigate to the team overview panel."""
+        team_num_str = str(team_num_str)
+
+        # Show view immediately with loading state, then populate
+        views = document.querySelectorAll('.view-container')
+        for view in views:
+            view.classList.remove('active')
+        tv = document.getElementById('view-team')
+        if tv:
+            tv.classList.add('active')
+        document.getElementById('team-overview-number').textContent = team_num_str
+        team_name_loading = self.team_names.get(team_num_str, '')
+        document.getElementById('team-overview-name').textContent = team_name_loading
+        container = document.getElementById('team-overview-content')
+        container.innerHTML = '<div class="text-center text-gray-500 py-8"><div class="inline-block size-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-2"></div><p class="text-xs">Loading team data…</p></div>'
+
+        # Fetch base data
+        if not self.rankings_data:
+            await self.load_rankings()
+        if not self.epa_data:
+            await self.load_epa_data()
+        if not self.matches_data:
+            self.matches_data = await self.client.get_event_matches()
+
+        team_key = f"frc{team_num_str}"
+        team_name = self.team_names.get(team_num_str, '')
+        document.getElementById('team-overview-name').textContent = team_name
+
+        # --- Ranking info ---
+        rank_info = {}
+        if self.rankings_data and self.rankings_data.get('rankings'):
+            for r in self.rankings_data['rankings']:
+                if r.get('team_key') == team_key:
+                    rank_info = r
+                    break
+
+        rank = rank_info.get('rank', '–')
+        record = rank_info.get('record', {})
+        wins = record.get('wins', 0)
+        losses = record.get('losses', 0)
+        ties = record.get('ties', 0)
+
+        opr = 0
+        if self.oprs_data:
+            opr = self.oprs_data.get('oprs', {}).get(team_key, 0)
+        opr_str = f"{opr:.1f}" if opr else "N/A"
+
+        epa_record = self.epa_lookup.get(team_num_str)
+        epa = get_epa_from_record(epa_record)
+        norm_epa = get_norm_epa_from_record(epa_record)
+        epa_str = f"{epa:.1f}" if epa else "N/A"
+        norm_str = f"{norm_epa:.1f}" if norm_epa else "N/A"
+
+        # --- Team's matches list ---
+        qual_matches = []
+        if self.matches_data:
+            qual_matches = sorted(
+                [m for m in self.matches_data
+                 if m.get('comp_level') == 'qm' and
+                    team_key in (m.get('alliances', {}).get('red', {}).get('team_keys', []) +
+                                  m.get('alliances', {}).get('blue', {}).get('team_keys', []))],
+                key=lambda x: x.get('match_number', 0)
+            )
+
+        matches_html = ''
+        for m in qual_matches:
+            mn = m.get('match_number', '?')
+            alliances = m.get('alliances', {})
+            red_teams = alliances.get('red', {}).get('team_keys', [])
+            blue_teams = alliances.get('blue', {}).get('team_keys', [])
+            color = 'red' if team_key in red_teams else 'blue'
+            our_score = alliances.get(color, {}).get('score', None)
+            opp_color = 'blue' if color == 'red' else 'red'
+            opp_score = alliances.get(opp_color, {}).get('score', None)
+            played = m.get('actual_time') is not None
+            color_cls = 'text-red-400' if color == 'red' else 'text-blue-400'
+
+            if played and our_score is not None and opp_score is not None:
+                if our_score > opp_score:
+                    result_cls, result_label = 'text-primary', 'W'
+                elif our_score < opp_score:
+                    result_cls, result_label = 'text-red-400', 'L'
+                else:
+                    result_cls, result_label = 'text-yellow-400', 'T'
+                score_html = f'<span class="{result_cls} font-black text-lg">{result_label}</span> <span class="text-white text-sm">{our_score}–{opp_score}</span>'
+            else:
+                time_str = self.format_match_time(m) or 'TBD'
+                score_html = f'<span class="text-gray-500 text-xs">{time_str}</span>'
+
+            ally_keys = red_teams if color == 'red' else blue_teams
+            allies = [k.replace('frc', '') for k in ally_keys if k != team_key]
+            allies_html = ' '.join([f'<span class="text-xs {color_cls}">{a}</span>' for a in allies])
+
+            matches_html += f'''
+            <div class="flex items-center justify-between p-2 bg-black/20 rounded-lg">
+                <div class="flex items-center gap-3">
+                    <span class="text-white font-black text-sm w-8">Q{mn}</span>
+                    <span class="text-[10px] font-bold uppercase {color_cls}">{color}</span>
+                    <div class="flex gap-1">{allies_html}</div>
+                </div>
+                <div>{score_html}</div>
+            </div>'''
+
+        if not matches_html:
+            matches_html = '<p class="text-gray-500 text-xs text-center py-2">No matches played yet.</p>'
+
+        # --- Scouting note ---
+        note = self.scouting_notes.get(team_num_str, '')
+        note_html = f'<p class="text-xs text-gray-300 whitespace-pre-wrap">{note}</p>' if note else '<p class="text-gray-600 text-xs italic">No notes yet.</p>'
+        has_note = bool(note.strip())
+        note_dot = '<span class="size-1.5 rounded-full bg-yellow-400 inline-block mr-1"></span>' if has_note else ''
+
+        container.innerHTML = f'''
+        <div class="grid grid-cols-2 gap-3">
+            <div class="glass-card rounded-xl p-4 text-center">
+                <p class="text-[10px] text-gray-400 uppercase mb-1">Rank</p>
+                <p class="text-3xl font-black text-white">#{rank}</p>
+            </div>
+            <div class="glass-card rounded-xl p-4 text-center">
+                <p class="text-[10px] text-gray-400 uppercase mb-1">Record</p>
+                <p class="text-3xl font-black text-primary">{wins}–{losses}–{ties}</p>
+            </div>
+            <div class="glass-card rounded-xl p-4 text-center">
+                <p class="text-[10px] text-gray-400 uppercase mb-1">OPR</p>
+                <p class="text-2xl font-black text-white">{opr_str}</p>
+            </div>
+            <div class="glass-card rounded-xl p-4 text-center">
+                <p class="text-[10px] text-gray-400 uppercase mb-1">EPA</p>
+                <p class="text-2xl font-black text-white">{epa_str}</p>
+                <p class="text-[10px] text-gray-500">Norm: {norm_str}</p>
+            </div>
+        </div>
+
+        <section class="glass-card rounded-xl p-4">
+            <h3 class="text-white text-xs font-bold uppercase tracking-widest mb-3">Match History</h3>
+            <div class="space-y-2">{matches_html}</div>
+        </section>
+
+        <section class="glass-card rounded-xl p-4 border border-yellow-400/20">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-yellow-400 !text-base">edit_note</span>
+                    <h3 class="text-white text-xs font-bold uppercase tracking-widest">Scouting Notes</h3>
+                </div>
+                <button class="notes-btn text-yellow-400 hover:text-yellow-300 text-xs font-bold flex items-center gap-1" data-key="{team_num_str}">
+                    {note_dot}<span class="material-symbols-outlined !text-sm">edit</span>
+                    {'Edit' if has_note else 'Add Note'}
+                </button>
+            </div>
+            {note_html}
+        </section>
+        '''
+
+        self._wire_notes_buttons()
+
     def render_schedule(self, filter_type):
-        """Render match schedule based on filter"""
+        """Render match schedule based on filter and search query."""
         if not self.matches_data:
             return
         
         qual_matches = [m for m in self.matches_data if m.get('comp_level') == 'qm']
         qual_matches.sort(key=lambda x: x.get('match_number', 0))
         
-        # Apply filter
+        # Apply status filter
         if filter_type == 'upcoming':
             matches = [m for m in qual_matches if not m.get('actual_time')]
         elif filter_type == 'completed':
@@ -1133,17 +1606,27 @@ class Dashboard:
         elif filter_type == 'myteam':
             if self.client.team_number:
                 team_key = f"frc{self.client.team_number}"
-                matches = []
-                for m in qual_matches:
-                    alliances = m.get('alliances', {})
-                    red_teams = alliances.get('red', {}).get('team_keys', [])
-                    blue_teams = alliances.get('blue', {}).get('team_keys', [])
-                    if team_key in red_teams or team_key in blue_teams:
-                        matches.append(m)
+                matches = [m for m in qual_matches
+                           if team_key in m.get('alliances', {}).get('red', {}).get('team_keys', []) +
+                                         m.get('alliances', {}).get('blue', {}).get('team_keys', [])]
             else:
                 matches = []
-        else:  # 'all'
+        else:
             matches = qual_matches
+
+        # Apply team search filter
+        q = self.schedule_search
+        if q:
+            def match_has_team(m):
+                all_keys = (m.get('alliances', {}).get('red', {}).get('team_keys', []) +
+                            m.get('alliances', {}).get('blue', {}).get('team_keys', []))
+                for frc_key in all_keys:
+                    num = frc_key.replace('frc', '')
+                    name = self.team_names.get(num, '').lower()
+                    if q in num or q in name:
+                        return True
+                return False
+            matches = [m for m in matches if match_has_team(m)]
         
         container = document.getElementById('schedule-matches')
         
@@ -1156,71 +1639,87 @@ class Dashboard:
             html += self.render_match_card(match)
         
         container.innerHTML = html
-        
-        # Add click handlers to match cards
-        match_cards = document.querySelectorAll('.match-card')
-        for card in match_cards:
-            card.addEventListener('click', create_proxy(self.view_match_analysis))
+        self._wire_notes_buttons()
     
+    def _team_row(self, frc_key, color):
+        """Render one team row: number (highlighted if mine) + name + note indicator."""
+        num = frc_key.replace('frc', '')
+        name = self.team_names.get(num, '')
+        is_mine = self.client.team_number and num == str(self.client.team_number)
+        num_cls = 'text-primary font-black' if is_mine else ('text-red-300' if color == 'red' else 'text-blue-300')
+        mine_badge = '<span class="text-[9px] bg-primary/20 text-primary px-1 rounded font-bold ml-1">YOU</span>' if is_mine else ''
+        name_html = f'<span class="text-gray-500 text-[10px] ml-1">– {name}</span>' if name else ''
+        has_note = bool(self.scouting_notes.get(num, '').strip())
+        note_dot = f'<span class="note-dot size-1 rounded-full bg-yellow-400 inline-block ml-1 align-middle" style="display:{"inline-block" if has_note else "none"}"></span>'
+        return f'<div class="text-xs leading-5 notes-btn cursor-pointer hover:opacity-75" data-key="{num}"><span class="{num_cls}">{num}</span>{mine_badge}{note_dot}{name_html}</div>'
+
     def render_match_card(self, match):
-        """Render a single match card"""
+        """Render a single match card with per-team rows, names, scheduled time, and notes."""
         match_num = match.get('match_number', '?')
         match_key = match.get('key', '')
-        
+
         alliances = match.get('alliances', {})
         red_teams = alliances.get('red', {}).get('team_keys', [])
         blue_teams = alliances.get('blue', {}).get('team_keys', [])
-        
-        red_nums = ', '.join([t.replace('frc', '') for t in red_teams])
-        blue_nums = ', '.join([t.replace('frc', '') for t in blue_teams])
-        
+
+        red_rows = ''.join([self._team_row(t, 'red') for t in red_teams])
+        blue_rows = ''.join([self._team_row(t, 'blue') for t in blue_teams])
+
         is_completed = match.get('actual_time') is not None
-        
+
+        my_key = f"frc{self.client.team_number}" if self.client.team_number else None
+        involves_me = my_key and (my_key in red_teams or my_key in blue_teams)
+        card_border = 'border-primary/40' if involves_me else 'border-transparent'
+
         if is_completed:
             red_score = alliances.get('red', {}).get('score', 0)
             blue_score = alliances.get('blue', {}).get('score', 0)
-            
-            red_class = 'text-primary font-bold' if red_score > blue_score else 'text-gray-400'
-            blue_class = 'text-primary font-bold' if blue_score > red_score else 'text-gray-400'
-            
-            scores_html = f'''
-            <div class="flex gap-4 text-center">
+            red_cls = 'text-primary font-bold' if red_score > blue_score else 'text-gray-400'
+            blue_cls = 'text-primary font-bold' if blue_score > red_score else 'text-gray-400'
+            right_html = f'''
+            <div class="flex gap-3 text-center shrink-0">
                 <div>
-                    <p class="text-xs text-gray-400 uppercase">Red</p>
-                    <p class="text-2xl font-black {red_class}">{red_score}</p>
+                    <p class="text-[9px] text-gray-400 uppercase">Red</p>
+                    <p class="text-xl font-black {red_cls}">{red_score}</p>
                 </div>
-                <span class="text-gray-500 self-center">-</span>
+                <span class="text-gray-600 self-center">–</span>
                 <div>
-                    <p class="text-xs text-gray-400 uppercase">Blue</p>
-                    <p class="text-2xl font-black {blue_class}">{blue_score}</p>
+                    <p class="text-[9px] text-gray-400 uppercase">Blue</p>
+                    <p class="text-xl font-black {blue_cls}">{blue_score}</p>
                 </div>
-            </div>
-            '''
+            </div>'''
         else:
-            scores_html = '<p class="text-xs text-gray-500 uppercase">Not Played</p>'
-        
+            time_str = self.format_match_time(match)
+            time_html = f'<p class="text-primary/70 text-[10px] mt-0.5">{time_str}</p>' if time_str else '<p class="text-gray-600 text-[10px]">TBD</p>'
+            right_html = f'<div class="text-center shrink-0">{time_html}</div>'
+
+        has_match_note = bool(self.scouting_notes.get(match_key, '').strip())
+        match_note_dot = f'<span class="note-dot size-1.5 rounded-full bg-yellow-400 inline-block mr-1" style="display:{"inline-block" if has_match_note else "none"}"></span>'
+
         return f'''
-        <div class="match-card glass-card rounded-lg p-4 cursor-pointer hover:border-primary/30 border border-transparent transition-colors" data-match-key="{match_key}">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <div class="text-center">
-                        <p class="text-[10px] text-gray-400 uppercase">Match</p>
-                        <p class="text-xl font-black text-white leading-none">Q{match_num}</p>
+        <div class="match-card glass-card rounded-lg p-4 cursor-pointer hover:border-primary/30 border {card_border} transition-colors" data-match-key="{match_key}">
+            <div class="flex items-center justify-between gap-3">
+                <div class="text-center shrink-0 w-10">
+                    <p class="text-[9px] text-gray-400 uppercase">Q</p>
+                    <p class="text-2xl font-black text-white leading-none">{match_num}</p>
+                </div>
+                <div class="flex-1 grid grid-cols-2 gap-x-3 gap-y-0">
+                    <div>
+                        <p class="text-[9px] text-red-500 uppercase font-bold mb-0.5">Red</p>
+                        {red_rows}
                     </div>
-                    <div class="flex-1">
-                        <div class="mb-2">
-                            <p class="text-[10px] text-red-400 uppercase font-bold">Red</p>
-                            <p class="text-sm text-white">{red_nums}</p>
-                        </div>
-                        <div>
-                            <p class="text-[10px] text-blue-400 uppercase font-bold">Blue</p>
-                            <p class="text-sm text-white">{blue_nums}</p>
-                        </div>
+                    <div>
+                        <p class="text-[9px] text-blue-500 uppercase font-bold mb-0.5">Blue</p>
+                        {blue_rows}
                     </div>
                 </div>
-                <div class="flex items-center gap-4">
-                    {scores_html}
-                    <span class="material-symbols-outlined text-primary">arrow_forward_ios</span>
+                <div class="flex items-center gap-2 shrink-0">
+                    {right_html}
+                    <button class="match-notes-btn text-gray-500 hover:text-yellow-400 transition-colors p-1 flex flex-col items-center" data-key="{match_key}" data-match-num="{match_num}" title="Match notes">
+                        {match_note_dot}
+                        <span class="material-symbols-outlined !text-base">note_add</span>
+                    </button>
+                    <span class="material-symbols-outlined text-gray-600 !text-base">chevron_right</span>
                 </div>
             </div>
         </div>
@@ -1228,7 +1727,7 @@ class Dashboard:
     
     async def view_match_analysis(self, event):
         """View detailed match analysis"""
-        card = event.target.closest('.match-card')
+        card = event.target.closest('.match-card') or event.target.closest('.upcoming-match-card')
         if not card:
             return
         
@@ -1316,33 +1815,65 @@ class Dashboard:
         red_teams_html = ''
         for team_key, epa, norm in red_team_epas:
             team_num = team_key.replace('frc', '')
+            team_name = self.team_names.get(team_num, '')
+            is_mine = self.client.team_number and team_num == str(self.client.team_number)
+            num_cls = 'text-primary font-black' if is_mine else 'text-white font-bold'
+            mine_badge = '<span class="text-[9px] bg-primary/20 text-primary px-1 rounded font-bold ml-1">YOU</span>' if is_mine else ''
             epa_str = f"{epa:.1f}" if epa else "N/A"
             norm_str = f"{norm:.1f}" if norm else "N/A"
+            has_note = bool(self.scouting_notes.get(team_num, '').strip())
+            note_dot = f'<span class="note-dot size-1.5 rounded-full bg-yellow-400 mr-1 inline-block" style="display:{"inline-block" if has_note else "none"}"></span>'
             red_teams_html += f'''
             <div class="flex justify-between items-center p-2 bg-black/20 rounded">
-                <span class="text-white font-bold">{team_num}</span>
-                <div class="text-right">
+                <div class="flex-1">
+                    <span class="{num_cls}">{team_num}</span>{mine_badge}
+                    {f'<p class="text-[10px] text-gray-500">{team_name}</p>' if team_name else ''}
+                </div>
+                <div class="text-right mr-3">
                     <p class="text-xs text-gray-400">EPA: <span class="text-white">{epa_str}</span></p>
                     <p class="text-[10px] text-gray-500">Norm: {norm_str}</p>
                 </div>
+                <button class="notes-btn text-gray-500 hover:text-yellow-400 transition-colors p-1 flex flex-col items-center shrink-0" data-key="{team_num}" title="Notes for {team_num}">
+                    {note_dot}
+                    <span class="material-symbols-outlined !text-base">edit_note</span>
+                </button>
             </div>
             '''
-        
+
         blue_teams_html = ''
         for team_key, epa, norm in blue_team_epas:
             team_num = team_key.replace('frc', '')
+            team_name = self.team_names.get(team_num, '')
+            is_mine = self.client.team_number and team_num == str(self.client.team_number)
+            num_cls = 'text-primary font-black' if is_mine else 'text-white font-bold'
+            mine_badge = '<span class="text-[9px] bg-primary/20 text-primary px-1 rounded font-bold ml-1">YOU</span>' if is_mine else ''
             epa_str = f"{epa:.1f}" if epa else "N/A"
             norm_str = f"{norm:.1f}" if norm else "N/A"
+            has_note = bool(self.scouting_notes.get(team_num, '').strip())
+            note_dot = f'<span class="note-dot size-1.5 rounded-full bg-yellow-400 mr-1 inline-block" style="display:{"inline-block" if has_note else "none"}"></span>'
             blue_teams_html += f'''
             <div class="flex justify-between items-center p-2 bg-black/20 rounded">
-                <span class="text-white font-bold">{team_num}</span>
-                <div class="text-right">
+                <div class="flex-1">
+                    <span class="{num_cls}">{team_num}</span>{mine_badge}
+                    {f'<p class="text-[10px] text-gray-500">{team_name}</p>' if team_name else ''}
+                </div>
+                <div class="text-right mr-3">
                     <p class="text-xs text-gray-400">EPA: <span class="text-white">{epa_str}</span></p>
                     <p class="text-[10px] text-gray-500">Norm: {norm_str}</p>
                 </div>
+                <button class="notes-btn text-gray-500 hover:text-yellow-400 transition-colors p-1 flex flex-col items-center shrink-0" data-key="{team_num}" title="Notes for {team_num}">
+                    {note_dot}
+                    <span class="material-symbols-outlined !text-base">edit_note</span>
+                </button>
             </div>
             '''
         
+        match_key = match.get('key', '')
+        existing_match_note = self.scouting_notes.get(match_key, '')
+        match_note_preview = f'<p class="text-xs text-gray-300 mt-2 whitespace-pre-wrap">{existing_match_note}</p>' if existing_match_note else '<p class="text-xs text-gray-600 italic">No match notes yet.</p>'
+        has_match_note = bool(existing_match_note.strip())
+        match_note_dot = f'<span class="note-dot size-1.5 rounded-full bg-yellow-400 mr-1.5 inline-block" style="display:{"inline-block" if has_match_note else "none"}"></span>'
+
         html = f'''
         <section class="glass-card rounded-xl p-6">
             <div class="text-center mb-6">
@@ -1409,6 +1940,21 @@ class Dashboard:
                 </div>
             </div>
         </section>
+
+        <section class="glass-card rounded-xl p-5 border border-yellow-400/20">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-yellow-400 !text-base">note_add</span>
+                    <h3 class="text-white text-xs font-bold uppercase tracking-widest">Match Notes</h3>
+                </div>
+                <button class="match-notes-btn text-xs font-bold text-yellow-400 hover:text-yellow-300 transition-colors flex items-center gap-1" data-key="{match_key}" data-match-num="{match_num}">
+                    {match_note_dot}
+                    <span class="material-symbols-outlined !text-sm">edit</span>
+                    {'Edit' if has_match_note else 'Add Note'}
+                </button>
+            </div>
+            {match_note_preview}
+        </section>
         
         <section class="glass-card rounded-xl p-5">
             <h3 class="text-white text-xs font-bold uppercase tracking-widest mb-3">About EPA</h3>
@@ -1422,6 +1968,7 @@ class Dashboard:
         '''
         
         container.innerHTML = html
+        self._wire_notes_buttons()
     
     def switch_epa_type(self, event):
         """Switch between EPA and Unitless EPA"""
