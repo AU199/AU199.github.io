@@ -1646,7 +1646,7 @@ class Dashboard:
         num = frc_key.replace('frc', '')
         name = self.team_names.get(num, '')
         is_mine = self.client.team_number and num == str(self.client.team_number)
-        num_cls = 'text-primary font-black' if is_mine else ('text-red-300' if color == 'red' else 'text-blue-300')
+        num_cls = 'text-primary font-black' if is_mine else ('text-red-300' if color == 'red' else 'text-blue-700')
         mine_badge = '<span class="text-[9px] bg-primary/20 text-primary px-1 rounded font-bold ml-1">YOU</span>' if is_mine else ''
         name_html = f'<span class="text-gray-500 text-[10px] ml-1">– {name}</span>' if name else ''
         has_note = bool(self.scouting_notes.get(num, '').strip())
