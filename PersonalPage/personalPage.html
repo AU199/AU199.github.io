@@ -1,23 +1,60 @@
 <!DOCTYPE html>
-<html lang="eng">
-    <head>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Project Display</title>
-    <link rel = "stylesheet" href="Style.css">
-    </head>
-    <body>
-        <div class="container">
-        <div class="wheel-container">
-            <div class="wheel" id="wheel"></div>
+    <title>Personal Projects</title>
+    <link rel="stylesheet" href="Style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+
+        <!-- Left collapsed panel -->
+        <div class="side-panel side-panel--left" id="prevPanel" onclick="prevProject()">
+            <div class="side-panel__content" id="prevContent">
+                <span class="side-panel__label">prev</span>
+                <p class="side-panel__text" id="prevTitle"></p>
+            </div>
         </div>
 
-        <div class="controls">
-            <div class="arrow" id="prevBtn">↑</div>
-            <div class="arrow" id="nextBtn">↓</div>
+        <!-- Main card -->
+        <div class="main-card" id="mainCard">
+            <div class="main-card__header">
+                <h1 class="main-card__title" id="mainTitle"></h1>
+                <a class="main-card__link" id="mainLink" href="#" target="_blank" rel="noopener noreferrer">
+                    <span id="mainLinkText"></span>
+                    <svg width="13" height="13" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
+                        <path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
+                    </svg>
+                </a>
+            </div>
+
+            <div class="main-card__description-box">
+                <p class="main-card__description" id="mainDescription"></p>
+                <div class="main-card__meta" id="mainMeta"></div>
+            </div>
         </div>
 
-        <div class="progress-indicator" id="progressIndicator"></div>
-    </body>
-    <script src = "script.js"></script>
+        <!-- Right collapsed panel -->
+        <div class="side-panel side-panel--right" id="nextPanel" onclick="nextProject()">
+            <div class="side-panel__content" id="nextContent">
+                <span class="side-panel__label">next</span>
+                <p class="side-panel__text" id="nextTitle"></p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <button class="nav__arrow" id="prevBtn" aria-label="Previous">←</button>
+        <div class="nav__dots" id="progressIndicator"></div>
+        <button class="nav__arrow" id="nextBtn" aria-label="Next">→</button>
+    </nav>
+
+    <script src="script.js"></script>
+</body>
 </html>
