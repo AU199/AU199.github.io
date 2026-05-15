@@ -45,22 +45,46 @@ const LANG_COLORS = {
 };
 
 let currentIndex = 0;
-let isAnimating = false;
+let isAnimating  = false;
 
-// DOM refs
-const mainCard        = document.getElementById('mainCard');
-const mainTitle       = document.getElementById('mainTitle');
-const mainLink        = document.getElementById('mainLink');
-const mainLinkText    = document.getElementById('mainLinkText');
-const mainDescription = document.getElementById('mainDescription');
-const mainMeta        = document.getElementById('mainMeta');
-const prevPanel       = document.getElementById('prevPanel');
-const nextPanel       = document.getElementById('nextPanel');
-const prevTitle       = document.getElementById('prevTitle');
-const nextTitle       = document.getElementById('nextTitle');
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const mainCard          = document.getElementById('mainCard');
+const mainTitle         = document.getElementById('mainTitle');
+const mainLink          = document.getElementById('mainLink');
+const mainLinkText      = document.getElementById('mainLinkText');
+const mainDescription   = document.getElementById('mainDescription');
+const mainMeta          = document.getElementById('mainMeta');
+const prevPanel         = document.getElementById('prevPanel');
+const nextPanel         = document.getElementById('nextPanel');
+const prevTitle         = document.getElementById('prevTitle');
+const nextTitle         = document.getElementById('nextTitle');
 const progressIndicator = document.getElementById('progressIndicator');
 
-// ── Build dot indicators ──────────────────────────────────────────────────────
+// Overlay refs
+const detailOverlay     = document.getElementById('detailOverlay');
+const detailTitle       = document.getElementById('detailTitle');
+const detailDescription = document.getElementById('detailDescription');
+const detailMeta        = document.getElementById('detailMeta');
+const detailLink        = document.getElementById('detailLink');
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function makeLangBadge(language) {
+    if (!language) return null;
+    const badge = document.createElement('span');
+    badge.className = 'lang-badge';
+    const color = LANG_COLORS[language] || '#888';
+    badge.innerHTML = `<span class="lang-dot" style="background:${color}"></span>${language}`;
+    return badge;
+}
+
+function shortUrl(url) {
+    try {
+        const u = new URL(url);
+        return u.hostname.replace('www.', '') + u.pathname;
+    } catch { return url; }
+}
+
+// ── Dot indicators ────────────────────────────────────────────────────────────
 function buildDots() {
     progressIndicator.innerHTML = '';
     projects.forEach((_, i) => {
@@ -80,36 +104,22 @@ function updateDots() {
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderMain(project) {
-    mainTitle.textContent = project.title;
-
-    // Derive a short display URL from the full URL
-    const urlObj = (() => { try { return new URL(project.url); } catch { return null; } })();
-    const displayLink = urlObj
-        ? urlObj.hostname.replace('www.', '') + urlObj.pathname
-        : project.url;
-
-    mainLink.href = project.url;
-    mainLinkText.textContent = displayLink;
-
+    mainTitle.textContent    = project.title;
+    mainLink.href            = project.url;
+    mainLinkText.textContent = shortUrl(project.url);
     mainDescription.textContent = project.description;
 
-    // Language badge
     mainMeta.innerHTML = '';
-    if (project.language) {
-        const badge = document.createElement('span');
-        badge.className = 'lang-badge';
-        const color = LANG_COLORS[project.language] || '#888';
-        badge.innerHTML = `<span class="lang-dot" style="background:${color}"></span>${project.language}`;
-        mainMeta.appendChild(badge);
-    }
+    const badge = makeLangBadge(project.language);
+    if (badge) mainMeta.appendChild(badge);
 }
 
 function renderSidePanels() {
-    const total = projects.length;
-    const prevIndex = (currentIndex - 1 + total) % total;
-    const nextIndex = (currentIndex + 1) % total;
-    prevTitle.textContent = projects[prevIndex].title;
-    nextTitle.textContent = projects[nextIndex].title;
+    const total    = projects.length;
+    const prevIdx  = (currentIndex - 1 + total) % total;
+    const nextIdx  = (currentIndex + 1) % total;
+    prevTitle.textContent = projects[prevIdx].title;
+    nextTitle.textContent = projects[nextIdx].title;
 }
 
 function render() {
@@ -118,18 +128,57 @@ function render() {
     updateDots();
 }
 
+// ── Mobile detail overlay ─────────────────────────────────────────────────────
+function openDetail() {
+    const project = projects[currentIndex];
+    detailTitle.textContent       = project.title;
+    detailDescription.textContent = project.description;
+    detailLink.href               = project.url;
+
+    detailMeta.innerHTML = '';
+    const badge = makeLangBadge(project.language);
+    if (badge) {
+        // Reuse lang-badge but clone it so the class list works inside sheet too
+        detailMeta.appendChild(badge);
+    }
+
+    detailOverlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDetail() {
+    detailOverlay.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+// Tap the dim backdrop to close
+detailOverlay.addEventListener('click', (e) => {
+    if (e.target === detailOverlay) closeDetail();
+});
+
+// Swipe down on sheet to close
+let sheetTouchStartY = 0;
+const detailSheet = document.getElementById('detailSheet');
+detailSheet.addEventListener('touchstart', (e) => {
+    sheetTouchStartY = e.touches[0].clientY;
+}, { passive: true });
+detailSheet.addEventListener('touchend', (e) => {
+    const dy = e.changedTouches[0].clientY - sheetTouchStartY;
+    if (dy > 60) closeDetail();
+});
+
 // ── Animated transitions ──────────────────────────────────────────────────────
 function animateTransition(direction) {
-    if (isAnimating) return false;
+    if (isAnimating) return;
     isAnimating = true;
 
     const outClass = direction === 'next' ? 'slide-out-right' : 'slide-out-left';
-    const inClass  = direction === 'next' ? 'slide-in-left'  : 'slide-in-right';
+    const inClass  = direction === 'next' ? 'slide-in-left'   : 'slide-in-right';
 
-    mainCard.classList.add('animating', outClass);
+    mainCard.classList.add(outClass);
 
     setTimeout(() => {
-        mainCard.classList.remove('animating', outClass);
+        mainCard.classList.remove(outClass);
         render();
         mainCard.classList.add(inClass);
         setTimeout(() => {
@@ -137,23 +186,24 @@ function animateTransition(direction) {
             isAnimating = false;
         }, 380);
     }, 200);
-
-    return true;
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 function nextProject() {
+    closeDetail();
     currentIndex = (currentIndex + 1) % projects.length;
     animateTransition('next');
 }
 
 function prevProject() {
+    closeDetail();
     currentIndex = (currentIndex - 1 + projects.length) % projects.length;
     animateTransition('prev');
 }
 
 function goTo(index) {
     if (index === currentIndex || isAnimating) return;
+    closeDetail();
     const dir = index > currentIndex ? 'next' : 'prev';
     currentIndex = index;
     animateTransition(dir);
@@ -166,23 +216,27 @@ prevPanel.addEventListener('click', prevProject);
 nextPanel.addEventListener('click', nextProject);
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextProject();
-    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   prevProject();
+    if (e.key === 'Escape')                               closeDetail();
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown')  nextProject();
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')    prevProject();
 });
 
-// Touch/swipe support
+// Horizontal swipe on main area to navigate (but not inside the sheet)
 let touchStartX = 0;
-document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
-document.addEventListener('touchend',   (e) => {
+document.addEventListener('touchstart', (e) => {
+    if (!detailOverlay.classList.contains('open'))
+        touchStartX = e.touches[0].clientX;
+}, { passive: true });
+document.addEventListener('touchend', (e) => {
+    if (detailOverlay.classList.contains('open')) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
     if (Math.abs(dx) > 50) dx < 0 ? nextProject() : prevProject();
-});
+}, { passive: true });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 buildDots();
 mainCard.classList.add('initial-load');
 render();
-// Remove after it fires once so it never replays on subsequent transitions
 mainCard.addEventListener('animationend', () => {
     mainCard.classList.remove('initial-load');
 }, { once: true });

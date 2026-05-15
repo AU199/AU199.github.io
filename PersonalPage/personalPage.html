@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 </head>
 <body>
+
     <div class="container">
 
         <!-- Left collapsed panel -->
@@ -32,10 +33,19 @@
                 </a>
             </div>
 
+            <!-- Desktop: always-visible description box -->
             <div class="main-card__description-box">
                 <p class="main-card__description" id="mainDescription"></p>
                 <div class="main-card__meta" id="mainMeta"></div>
             </div>
+
+            <!-- Mobile only: tap-to-expand pill -->
+            <button class="mobile-expand-btn" id="mobileExpandBtn" onclick="openDetail()">
+                <span>About this project</span>
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </button>
         </div>
 
         <!-- Right collapsed panel -->
@@ -50,11 +60,35 @@
 
     <!-- Navigation -->
     <nav class="nav">
-        <button class="nav__arrow" id="prevBtn" aria-label="Previous">←</button>
+        <button class="nav__arrow" id="prevBtn" aria-label="Previous">&#8592;</button>
         <div class="nav__dots" id="progressIndicator"></div>
-        <button class="nav__arrow" id="nextBtn" aria-label="Next">→</button>
+        <button class="nav__arrow" id="nextBtn" aria-label="Next">&#8594;</button>
     </nav>
+
+    <!-- Mobile detail overlay (bottom sheet) -->
+    <div class="detail-overlay" id="detailOverlay">
+        <div class="detail-sheet" id="detailSheet">
+            <div class="detail-sheet__handle"></div>
+            <div class="detail-sheet__header">
+                <h2 class="detail-sheet__title" id="detailTitle"></h2>
+                <button class="detail-sheet__close" onclick="closeDetail()" aria-label="Close">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <p class="detail-sheet__description" id="detailDescription"></p>
+            <div class="detail-sheet__meta" id="detailMeta"></div>
+            <a class="detail-sheet__link" id="detailLink" href="#" target="_blank" rel="noopener noreferrer">
+                View on GitHub
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
+                    <path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
+                </svg>
+            </a>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
-</html>
+</html> 
