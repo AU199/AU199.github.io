@@ -24,6 +24,13 @@ const projects = [
         url: "https://github.com/AU199/Swim-Team-Webscraper"
     },
     {
+        title: "Image Recreation Using the Fourier Transform",
+        description: "This is a project I created that uses OpenCV2 in order to find contours in images, after which it uses the contours as a signal function and finds the solutions for the number of epicucles already pre-programmed. I learnt how to use cv2, numpy and matplotlib",
+        language:"Python",
+        url: "https://github.com/AU199/Image-Recreation"
+    }
+    ,
+    {
         title: "Chess Engine",
         description: "Though this chess engine plays at a 400 elo level, it taught me many valuable skills pertaining to machine learning, alpha-beta pruning, and program optimization.",
         language: "Python",
