@@ -26,10 +26,15 @@ const projects = [
     {
         title: "Image Recreation Using the Fourier Transform",
         description: "This is a project I created that uses OpenCV2 in order to find contours in images, after which it uses the contours as a signal function and finds the solutions for the number of epicucles already pre-programmed. I learnt how to use cv2, numpy and matplotlib",
-        language:"Python",
+        language: "Python",
         url: "https://github.com/AU199/Image-Recreation"
-    }
-    ,
+    },
+    {
+        title: "Face Recognizer",
+        description: "Using OpenCV2 and PyTorch, this can recogize getures either on the face or something bigger, leading to different images showing up in a pygame window.",
+        language:"Python",
+        url: "https://github.com/AU199/Emotion-Recognizer"
+    },
     {
         title: "Chess Engine",
         description: "Though this chess engine plays at a 400 elo level, it taught me many valuable skills pertaining to machine learning, alpha-beta pruning, and program optimization.",
@@ -144,10 +149,7 @@ function openDetail() {
 
     detailMeta.innerHTML = '';
     const badge = makeLangBadge(project.language);
-    if (badge) {
-        // Reuse lang-badge but clone it so the class list works inside sheet too
-        detailMeta.appendChild(badge);
-    }
+    if (badge) detailMeta.appendChild(badge);
 
     detailOverlay.classList.add('open');
     document.body.style.overflow = 'hidden';
@@ -166,9 +168,21 @@ detailOverlay.addEventListener('click', (e) => {
 // Swipe down on sheet to close
 let sheetTouchStartY = 0;
 const detailSheet = document.getElementById('detailSheet');
-const detailSheetOpen = document.getElementById('mobileExpandBtn');
 
-detailSheetOpen.addEventListener('click',openDetail)
+// FIX 2: Use { passive: false } and stopPropagation so the expand button tap
+// doesn't also get swallowed by the document-level swipe handler.
+const mobileExpandBtn = document.getElementById('mobileExpandBtn');
+mobileExpandBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openDetail();
+});
+// Also handle touchend on the button so iOS tap-delay isn't an issue
+mobileExpandBtn.addEventListener('touchend', (e) => {
+    e.preventDefault();   // prevents ghost click + stops swipe handler from firing
+    e.stopPropagation();
+    openDetail();
+});
+
 detailSheet.addEventListener('touchstart', (e) => {
     sheetTouchStartY = e.touches[0].clientY;
 }, { passive: true });
@@ -211,10 +225,17 @@ function prevProject() {
     animateTransition('prev');
 }
 
+// FIX 1: goTo computes wrap-aware direction so clicking a dot or side panel
+// never produces a double-step. We also guard against firing while animating.
 function goTo(index) {
     if (index === currentIndex || isAnimating) return;
     closeDetail();
-    const dir = index > currentIndex ? 'next' : 'prev';
+
+    // Determine shortest-path direction, accounting for wrap-around
+    const total = projects.length;
+    const fwdDist = (index - currentIndex + total) % total;
+    const dir = fwdDist <= total / 2 ? 'next' : 'prev';
+
     currentIndex = index;
     animateTransition(dir);
 }
@@ -222,8 +243,17 @@ function goTo(index) {
 // ── Event listeners ───────────────────────────────────────────────────────────
 document.getElementById('prevBtn').addEventListener('click', prevProject);
 document.getElementById('nextBtn').addEventListener('click', nextProject);
-prevPanel.addEventListener('click', prevProject);
-nextPanel.addEventListener('click', nextProject);
+
+// FIX 1 (continued): side panels call goTo with the adjacent index rather than
+// prevProject/nextProject directly, so a single click can never decrement twice.
+prevPanel.addEventListener('click', () => {
+    const idx = (currentIndex - 1 + projects.length) % projects.length;
+    goTo(idx);
+});
+nextPanel.addEventListener('click', () => {
+    const idx = (currentIndex + 1) % projects.length;
+    goTo(idx);
+});
 
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape')                               closeDetail();
@@ -233,14 +263,21 @@ document.addEventListener('keydown', (e) => {
 
 // Horizontal swipe on main area to navigate (but not inside the sheet)
 let touchStartX = 0;
+let touchStartY = 0;
 document.addEventListener('touchstart', (e) => {
-    if (!detailOverlay.classList.contains('open'))
+    if (!detailOverlay.classList.contains('open')) {
         touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }
 }, { passive: true });
 document.addEventListener('touchend', (e) => {
     if (detailOverlay.classList.contains('open')) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
-    if (Math.abs(dx) > 50) dx < 0 ? nextProject() : prevProject();
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    // Only treat as a horizontal swipe if it's clearly more horizontal than vertical
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        dx < 0 ? nextProject() : prevProject();
+    }
 }, { passive: true });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
