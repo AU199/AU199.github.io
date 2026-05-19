@@ -166,6 +166,9 @@ detailOverlay.addEventListener('click', (e) => {
 // Swipe down on sheet to close
 let sheetTouchStartY = 0;
 const detailSheet = document.getElementById('detailSheet');
+const detailSheetOpen = document.getElementById('mobileExpandBtn');
+
+detailSheetOpen.addEventListener('click',openDetail)
 detailSheet.addEventListener('touchstart', (e) => {
     sheetTouchStartY = e.touches[0].clientY;
 }, { passive: true });
