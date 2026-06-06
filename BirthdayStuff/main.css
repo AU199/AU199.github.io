@@ -1,0 +1,45 @@
+body{
+    background-color: hsl(60, 20%, 67%);
+}
+
+.hidden{
+    display: none;
+}
+
+#bottomArrow{
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+
+    width: 150px; 
+    height: auto;
+
+    z-index: 1000;
+}
+
+#topArrow{
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-49%) rotate(180deg);
+    opacity: 0;
+    width: 150px;
+    height: auto;
+    z-index: 1000;
+}
+
+
+#firstPage {
+    height: 100vh;          
+    display: flex;
+    justify-content: center; 
+    align-items: center;     
+}
+
+#firstPage img {
+    max-width: 95vw;
+    max-height: 95vh;
+    width: auto;
+    height: auto;
+}
