@@ -1,24 +1,29 @@
 <!DOCTYPE html>
+<html lang="en">
 <head>
-    <style src = "main.css"></style>
-    <link rel = "stylesheet" href="main.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Birthday</title>
+    <link rel="stylesheet" href="main.css">
 </head>
 <body>
-    <img id = "topArrow" src = "gifs/arrow.gif">
-    <div id = "firstPage" class = "shown">
-        
-        <img src = "gifs/image.gif">
 
-    </div>    
+    <img id="topArrow" src="gifs/arrow.gif" alt="Previous">
 
-    <div id = "secondPage" class = "hidden">
-        <img src = "gifs/image2.gif">        
+    <div id="firstPage" class="page shown">
+        <img src="gifs/image.gif" alt="Page 1">
     </div>
 
-    <div id = "thirdPage" class = "hidden">
-        <img src = "gifs/image3.gif">
-        
+    <div id="secondPage" class="page hidden">
+        <img src="gifs/image2.gif" alt="Page 2">
     </div>
-    <img id = "bottomArrow" src = "gifs/arrow.gif">
 
+    <div id="thirdPage" class="page hidden">
+        <img src="gifs/image3.gif" alt="Page 3">
+    </div>
+
+    <img id="bottomArrow" src="gifs/arrow.gif" alt="Next">
+
+    <script src="script.js"></script>
 </body>
+</html>
