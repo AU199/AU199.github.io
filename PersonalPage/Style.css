@@ -2,6 +2,7 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
 :root {
@@ -19,6 +20,20 @@
 html, body {
     height: 100%;
 }
+
+::selection {
+    background: rgba(200,185,154,0.25);
+    color: var(--text-primary);
+}
+
+/* Custom scrollbar (webkit) for the mobile detail sheet */
+.detail-sheet::-webkit-scrollbar { width: 6px; }
+.detail-sheet::-webkit-scrollbar-track { background: transparent; }
+.detail-sheet::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.12);
+    border-radius: 4px;
+}
+.detail-sheet { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
 
 body {
     font-family: 'DM Mono', monospace;
@@ -129,6 +144,8 @@ body::before {
     transition: color 0.3s;
     max-height: 220px;
     overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 85%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 85%, transparent 100%);
 }
 
 .side-panel:hover .side-panel__text { color: var(--accent); }
@@ -148,6 +165,12 @@ body::before {
     gap: 1.5rem;
     position: relative;
     overflow: hidden;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.main-card:hover {
+    border-color: rgba(255,255,255,0.16);
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.5), 0 0 0 1px rgba(200,185,154,0.05) inset;
 }
 
 .main-card::before {
@@ -173,6 +196,7 @@ body::before {
     color: var(--text-primary);
     line-height: 1.1;
     letter-spacing: -0.01em;
+    text-shadow: 0 2px 24px rgba(0,0,0,0.35);
 }
 
 .main-card__link {
@@ -369,7 +393,7 @@ body::before {
     background: #181818;
     border-top: 1px solid rgba(255,255,255,0.1);
     border-radius: 20px 20px 0 0;
-    padding: 1rem 1.5rem 2.5rem;
+    padding: 1rem 1.5rem calc(2.5rem + env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
@@ -461,12 +485,34 @@ body::before {
     border-color: rgba(200,185,154,0.35);
 }
 
+/* ─── KEYBOARD FOCUS ─── */
+.side-panel:focus-visible,
+.nav__arrow:focus-visible,
+.nav__dot:focus-visible,
+.main-card__link:focus-visible,
+.mobile-expand-btn:focus-visible,
+.detail-sheet__close:focus-visible,
+.detail-sheet__link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+/* ─── REDUCED MOTION ─── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 /* ─── MOBILE BREAKPOINT ─── */
 @media (max-width: 520px) {
 
     body {
         justify-content: center;
-        padding-bottom: 5rem; /* room for fixed nav */
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom));
     }
 
     .container {
@@ -543,7 +589,7 @@ body::before {
     }
 
     .nav {
-        bottom: 1.25rem;
+        bottom: calc(1.25rem + env(safe-area-inset-bottom));
         gap: 1rem;
     }
 
