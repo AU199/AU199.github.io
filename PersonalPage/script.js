@@ -1,5 +1,23 @@
 const projects = [
     {
+        title: "Face Recognizer",
+        description: "Using OpenCV2 and PyTorch, this can recogize getures either on the face or something bigger, leading to different images showing up in a pygame window.",
+        language:"Python",
+        url: "https://github.com/AU199/Emotion-Recognizer"
+    },
+    {
+        title: "Chess Engine",
+        description: "Though this chess engine plays at a 400 elo level, it taught me many valuable skills pertaining to machine learning, alpha-beta pruning, and program optimization.",
+        language: "Python",
+        url: "https://github.com/AU199/NN-Alpha-Beta-Pruning"
+    },
+    {
+        title: "Image Recreation Using the Fourier Transform",
+        description: "This is a project I created that uses OpenCV2 in order to find contours in images, after which it uses the contours as a signal function and finds the solutions for the number of epicucles already pre-programmed. I learnt how to use cv2, numpy and matplotlib",
+        language: "Python",
+        url: "https://github.com/AU199/Image-Recreation"
+    },
+    {
         title: "Competition Picker",
         description: "Program that, using FIRST API and STATBotics API, produces a CSV file for each respective competition detailing each team and their performance within a specified time frame.",
         language: "Python",
@@ -22,24 +40,6 @@ const projects = [
         description: "Made for the swim coach to gain insight into times and other data about their swimmers. Taught me web scraping and data processing skills.",
         language: "Python",
         url: "https://github.com/AU199/Swim-Team-Webscraper"
-    },
-    {
-        title: "Image Recreation Using the Fourier Transform",
-        description: "This is a project I created that uses OpenCV2 in order to find contours in images, after which it uses the contours as a signal function and finds the solutions for the number of epicucles already pre-programmed. I learnt how to use cv2, numpy and matplotlib",
-        language: "Python",
-        url: "https://github.com/AU199/Image-Recreation"
-    },
-    {
-        title: "Face Recognizer",
-        description: "Using OpenCV2 and PyTorch, this can recogize getures either on the face or something bigger, leading to different images showing up in a pygame window.",
-        language:"Python",
-        url: "https://github.com/AU199/Emotion-Recognizer"
-    },
-    {
-        title: "Chess Engine",
-        description: "Though this chess engine plays at a 400 elo level, it taught me many valuable skills pertaining to machine learning, alpha-beta pruning, and program optimization.",
-        language: "Python",
-        url: "https://github.com/AU199/NN-Alpha-Beta-Pruning"
     },
     {
         title: "Mechanical Keyboard",
